@@ -1,0 +1,207 @@
+name: MCP CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest-matrix:
+    name: Pytest / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Compile source and tests
+        run: python -m compileall src tests examples
+
+      - name: Collect pytest checks
+        run: pytest --collect-only -q
+
+      - name: Run pytest suite
+        run: pytest -q
+
+  mcp-stdio-smoke:
+    name: MCP stdio smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Verify MCP tool surface and default dataset
+        run: |
+          python - <<'PY'
+          import asyncio
+          import json
+
+          from mcp import ClientSession, StdioServerParameters
+          from mcp.client.stdio import stdio_client
+
+          EXPECTED_TOOLS = {
+              "get_available_datasets",
+              "get_available_scenarios",
+              "describe_patient_data",
+              "propose_causal_question",
+              "estimate_causal_effect",
+              "run_target_trial_emulation",
+              "generate_causal_dag",
+              "check_adjustment_set",
+              "simulate_intervention",
+              "export_dataset",
+          }
+
+          def parse_result(result):
+              if getattr(result, "structuredContent", None) is not None:
+                  return result.structuredContent
+              return json.loads(result.content[0].text)
+
+          async def main():
+              params = StdioServerParameters(
+                  command="python",
+                  args=["-m", "patient_causal_mcp.server"],
+              )
+              async with stdio_client(params) as (read, write):
+                  async with ClientSession(read, write) as session:
+                      await session.initialize()
+                      tools = await session.list_tools()
+                      names = {tool.name for tool in tools.tools}
+                      assert names == EXPECTED_TOOLS
+                      assert "simulate_patient_data" not in names
+
+                      datasets = parse_result(await session.call_tool("get_available_datasets", arguments={}))
+                      assert datasets["default_dataset_id"] == "patient_001_100_days"
+
+                      summary = parse_result(await session.call_tool("describe_patient_data", arguments={}))
+                      assert summary["number_of_days"] == 100
+
+                      estimate = parse_result(
+                          await session.call_tool(
+                              "estimate_causal_effect",
+                              arguments={
+                                  "dataset_id": "patient_001_100_days",
+                                  "exposure": "late_night_screen_minutes",
+                                  "outcome": "outcome_sleep_quality",
+                                  "treatment_rule": {
+                                      "type": "binary_threshold",
+                                      "variable": "late_night_screen_minutes",
+                                      "threshold": 120,
+                                      "treated_condition": "<=",
+                                  },
+                                  "adjustment_variables": [
+                                      "stress_score",
+                                      "caffeine_mg",
+                                      "prior_sleep_quality",
+                                      "steps",
+                                  ],
+                                  "method": "g_formula",
+                              },
+                          )
+                      )
+                      assert estimate["sample_size_used"] == 100
+                      assert isinstance(estimate["estimated_effect"], float)
+
+          asyncio.run(main())
+          PY
+
+  package-integrity:
+    name: Package integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Build wheel and source distribution
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Install built wheel
+        run: |
+          python -m pip install dist/*.whl
+          python -m pip check
+
+      - name: Verify bundled package data from wheel
+        run: |
+          python - <<'PY'
+          from patient_causal_mcp.datasets import DEFAULT_DATASET_ID, load_bundled_dataset
+
+          records = load_bundled_dataset(DEFAULT_DATASET_ID)
+          assert len(records) == 100
+          assert "card_spend_usd" in records[0]
+          assert "texts_sent" in records[0]
+          assert "motion_walking_minutes" in records[0]
+          PY
+
+  examples:
+    name: Examples
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run direct Python example
+        run: python examples/example_client.py
+
+      - name: Verify README mentions static dataset workflow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          readme = Path("README.md").read_text()
+          assert "patient_001_100_days" in readme
+          assert "does **not** expose a `simulate_patient_data` MCP tool" in readme
+          assert "get_available_datasets" in readme
+          PY

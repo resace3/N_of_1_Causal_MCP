@@ -239,7 +239,7 @@ VARIABLE_DESCRIPTIONS: dict[str, str] = {
     "calories_burned": "Estimated daily calories burned from wearable activity data.",
     "spo2_percent": "Daily oxygen saturation estimate from wearable data.",
     "skin_temperature_c": "Daily average skin temperature estimate in Celsius.",
-    "steps": "Daily step count.",
+    "steps": "Daily step count from wearable or phone activity sensors.",
     "sedentary_minutes": "Daily sedentary minutes.",
     "active_minutes": "Daily active minutes.",
     "motion_stationary_minutes": "Phone or wearable motion classifier minutes spent stationary.",

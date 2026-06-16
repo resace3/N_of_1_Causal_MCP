@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "patient-causal-mcp"
 version = "0.1.0"
-description = "MCP server for synthetic N-of-1 patient simulation and causal analysis."
+description = "MCP server for bundled N-of-1 patient data and causal analysis."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

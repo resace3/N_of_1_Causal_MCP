@@ -2,6 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![MCP Server](https://img.shields.io/badge/MCP-server-6f42c1.svg)](https://modelcontextprotocol.io/)
+[![MCP CI](https://github.com/resace3/N_of_1_Causal_MCP/actions/workflows/mcp-ci.yml/badge.svg)](https://github.com/resace3/N_of_1_Causal_MCP/actions/workflows/mcp-ci.yml)
 [![Tests](https://img.shields.io/badge/tests-pytest-0a7f44.svg)](https://docs.pytest.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](pyproject.toml)
 [![Repository](https://img.shields.io/badge/GitHub-resace3%2FN__of__1__Causal__MCP-black.svg)](https://github.com/resace3/N_of_1_Causal_MCP)
@@ -356,6 +357,8 @@ Run tests:
 ```bash
 pytest
 ```
+
+The pytest suite includes more than 400 collected checks covering the bundled dataset contract, variable dictionary, realistic ranges, MCP tool registration, stdio MCP calls, causal estimators, DAG helpers, and examples.
 
 Run a local MCP smoke test from Python:
 
