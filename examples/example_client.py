@@ -5,19 +5,14 @@ from __future__ import annotations
 from patient_causal_mcp.server import (
     estimate_causal_effect,
     generate_causal_dag,
+    get_available_datasets,
     simulate_intervention,
-    simulate_patient_data,
 )
 
 
 def main() -> None:
-    simulation = simulate_patient_data(
-        n_days=180,
-        seed=42,
-        scenario="sleep_screen_time",
-        start_date="2026-01-01",
-    )
-    dataset_id = simulation["dataset_id"]
+    datasets = get_available_datasets()
+    dataset_id = datasets["default_dataset_id"]
     print(f"Dataset: {dataset_id}")
     print(generate_causal_dag("sleep_screen_time")["mermaid"])
 
@@ -28,7 +23,7 @@ def main() -> None:
         treatment_rule={
             "type": "binary_threshold",
             "variable": "late_night_screen_minutes",
-            "threshold": 30,
+            "threshold": 120,
             "treated_condition": "<=",
         },
         adjustment_variables=["stress_score", "caffeine_mg", "prior_sleep_quality", "steps"],

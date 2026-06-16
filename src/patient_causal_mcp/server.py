@@ -1,4 +1,4 @@
-"""MCP server exposing synthetic patient simulation and causal analysis tools."""
+"""MCP server exposing bundled patient data and causal analysis tools."""
 
 from __future__ import annotations
 
@@ -7,6 +7,11 @@ from typing import Any
 from patient_causal_mcp.causal_engine import CausalAnalysisEngine
 from patient_causal_mcp.dag import check_adjustment_set as check_adjustment_set_core
 from patient_causal_mcp.dag import generate_causal_dag as generate_causal_dag_core
+from patient_causal_mcp.datasets import (
+    DEFAULT_DATASET_ID,
+    get_bundled_dataset_metadata,
+    load_bundled_dataset,
+)
 from patient_causal_mcp.scenarios import list_scenarios
 from patient_causal_mcp.schemas import (
     CheckAdjustmentSetInput,
@@ -16,10 +21,8 @@ from patient_causal_mcp.schemas import (
     GenerateDagInput,
     ProposeCausalQuestionInput,
     SimulateInterventionInput,
-    SimulatePatientDataInput,
     TargetTrialInput,
 )
-from patient_causal_mcp.simulator import PatientSimulator
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -28,8 +31,14 @@ except Exception:  # pragma: no cover - exercised only when the MCP SDK is unava
 
 
 DATASET_REGISTRY: dict[str, list[dict[str, Any]]] = {}
-SIMULATOR = PatientSimulator()
 ENGINE = CausalAnalysisEngine()
+
+
+def _ensure_bundled_datasets_loaded() -> None:
+    """Load bundled static datasets into the in-memory registry if needed."""
+
+    if DEFAULT_DATASET_ID not in DATASET_REGISTRY:
+        DATASET_REGISTRY[DEFAULT_DATASET_ID] = load_bundled_dataset(DEFAULT_DATASET_ID)
 
 
 def _records_from_input(dataset_id: str | None, data_records: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -37,37 +46,28 @@ def _records_from_input(dataset_id: str | None, data_records: list[dict[str, Any
 
     if data_records is not None:
         return data_records
+    _ensure_bundled_datasets_loaded()
     if not dataset_id:
-        raise ValueError("Provide either dataset_id or data_records.")
+        dataset_id = DEFAULT_DATASET_ID
     if dataset_id not in DATASET_REGISTRY:
         known = ", ".join(sorted(DATASET_REGISTRY)) or "none"
         raise ValueError(f"Unknown dataset_id '{dataset_id}'. Known dataset_ids: {known}.")
     return DATASET_REGISTRY[dataset_id]
 
 
-def simulate_patient_data(
-    patient_id: str | None = None,
-    n_days: int = 180,
-    start_date: str | None = None,
-    seed: int | None = None,
-    scenario: str = "mixed_lifestyle",
-) -> dict[str, Any]:
-    """Generate and store a synthetic longitudinal N-of-1 patient dataset."""
+def get_available_datasets() -> dict[str, Any]:
+    """Return bundled static datasets available for analysis."""
 
-    request = SimulatePatientDataInput(
-        patient_id=patient_id,
-        n_days=n_days,
-        start_date=start_date,
-        seed=seed,
-        scenario=scenario,
-    )
-    result = SIMULATOR.simulate(**request.model_dump())
-    DATASET_REGISTRY[result["dataset_id"]] = result["full_data"]
-    return result
+    _ensure_bundled_datasets_loaded()
+    return {
+        "default_dataset_id": DEFAULT_DATASET_ID,
+        "datasets": get_bundled_dataset_metadata(),
+        "loaded_dataset_ids": sorted(DATASET_REGISTRY),
+    }
 
 
 def get_available_scenarios() -> dict[str, Any]:
-    """Return descriptions of supported simulation scenarios."""
+    """Return descriptions of supported causal-analysis scenarios."""
 
     return {"scenarios": list_scenarios()}
 
@@ -77,7 +77,7 @@ def describe_patient_data(
     data_records: list[dict[str, Any]] | None = None,
     variables: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Summarize a simulated patient dataset."""
+    """Summarize a patient dataset."""
 
     request = DescribePatientDataInput(
         dataset_id=dataset_id,
@@ -285,7 +285,8 @@ def create_mcp_server() -> Any:
         )
     mcp = FastMCP("patient-causal-mcp")
 
-    mcp.tool()(simulate_patient_data)
+    _ensure_bundled_datasets_loaded()
+    mcp.tool()(get_available_datasets)
     mcp.tool()(get_available_scenarios)
     mcp.tool()(describe_patient_data)
     mcp.tool()(propose_causal_question)

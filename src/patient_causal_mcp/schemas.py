@@ -14,14 +14,6 @@ class DataInput(BaseModel):
     data_records: list[dict[str, Any]] | None = None
 
 
-class SimulatePatientDataInput(BaseModel):
-    patient_id: str | None = None
-    n_days: int = Field(default=180, gt=0)
-    start_date: str | None = None
-    seed: int | None = None
-    scenario: str = "mixed_lifestyle"
-
-
 class DescribePatientDataInput(DataInput):
     variables: list[str] | None = None
 

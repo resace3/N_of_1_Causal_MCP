@@ -123,7 +123,7 @@ class CausalAnalysisEngine:
             {
                 "question": (
                     "What would happen to next-day sleep quality if this patient reduced "
-                    "late-night screen time below 30 minutes compared with days above 90 minutes?"
+                    "late-night screen time to 120 minutes or less compared with higher-use days?"
                 ),
                 "exposure": "late_night_screen_minutes",
                 "outcome": "outcome_sleep_quality",
@@ -963,10 +963,10 @@ class CausalAnalysisEngine:
         direction = "higher" if effect > 0 else "lower"
         adjustment = ", ".join(adjustment_variables) if adjustment_variables else "no covariates"
         return (
-            f"On this simulated patient dataset, {treatment.label_a} was estimated to produce "
+            f"On this bundled patient dataset, {treatment.label_a} was estimated to produce "
             f"{abs(effect):.3f} units {direction} {outcome} than {treatment.label_b}, using "
             f"{method} and adjusting for {adjustment}. The estimate depends on the causal assumptions "
-            "and the simulated data-generating process."
+            "and the synthetic data-generating assumptions behind the bundled dataset."
         )
 
     def _apply_eligibility(

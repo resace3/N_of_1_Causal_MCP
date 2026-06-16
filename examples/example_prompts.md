@@ -2,25 +2,21 @@
 
 Use these prompts with an MCP-capable AI assistant after connecting the server.
 
-1. Simulate 180 days for a patient where late-night phone use affects sleep.
-2. Show me the causal DAG for the sleep screen-time scenario.
-3. Estimate the effect of reducing late-night screen time below 30 minutes on sleep quality.
-4. Check whether adjusting for stress, caffeine, prior sleep quality, and steps is reasonable.
-5. Run a target trial comparing intervention reminders versus no reminders for next-day sleep quality.
-6. Simulate an intervention where late-night screen time is reduced by 60 minutes.
-7. Export the current dataset as CSV.
+1. Show me the bundled patient datasets.
+2. Summarize the default 100-day patient dataset.
+3. Show me the causal DAG for the sleep screen-time scenario.
+4. Estimate the effect of reducing late-night screen time to 120 minutes or less on sleep quality.
+5. Check whether adjusting for stress, caffeine, prior sleep quality, and steps is reasonable.
+6. Run a target trial comparing intervention reminders versus no reminders for next-day sleep quality.
+7. Simulate an intervention where late-night screen time is reduced by 60 minutes.
+8. Export the current dataset as CSV.
 
 Example tool-style inputs:
 
 ```json
 {
-  "tool": "simulate_patient_data",
-  "arguments": {
-    "n_days": 180,
-    "seed": 42,
-    "scenario": "sleep_screen_time",
-    "start_date": "2026-01-01"
-  }
+  "tool": "get_available_datasets",
+  "arguments": {}
 }
 ```
 
@@ -28,13 +24,13 @@ Example tool-style inputs:
 {
   "tool": "estimate_causal_effect",
   "arguments": {
-    "dataset_id": "<dataset_id from simulation>",
+    "dataset_id": "patient_001_100_days",
     "exposure": "late_night_screen_minutes",
     "outcome": "outcome_sleep_quality",
     "treatment_rule": {
       "type": "binary_threshold",
       "variable": "late_night_screen_minutes",
-      "threshold": 30,
+      "threshold": 120,
       "treated_condition": "<="
     },
     "adjustment_variables": [
@@ -53,7 +49,7 @@ Example tool-style inputs:
 {
   "tool": "run_target_trial_emulation",
   "arguments": {
-    "dataset_id": "<dataset_id from simulation>",
+    "dataset_id": "patient_001_100_days",
     "eligibility_criteria": {
       "prior_sleep_quality": { "max": 8 }
     },

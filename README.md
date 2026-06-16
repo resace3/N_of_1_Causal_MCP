@@ -6,50 +6,64 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](pyproject.toml)
 [![Repository](https://img.shields.io/badge/GitHub-resace3%2FN__of__1__Causal__MCP-black.svg)](https://github.com/resace3/N_of_1_Causal_MCP)
 
-`patient-causal-mcp` is a local Model Context Protocol server for synthetic N-of-1 digital health research. It simulates one patient over time, exposes clinically interpretable causal scenarios, and lets an AI assistant run causal analyses through typed MCP tools.
+`patient-causal-mcp` is a local Model Context Protocol server for N-of-1 digital health causal analysis. It ships with a static 100-day single-patient dataset and exposes MCP tools that let an AI assistant summarize the data, inspect causal assumptions, run causal analyses, emulate target trials, simulate interventions, and export results.
 
-The project is intended for research prototyping, demos, and education. It does not provide medical advice.
+This repository does **not** expose a `simulate_patient_data` MCP tool. The patient dataset is already present in the repo at:
+
+```text
+src/patient_causal_mcp/data/patient_001_100_days.csv
+```
+
+The data are synthetic and manually bundled for demonstration, research prototyping, and education. The project does not provide medical advice.
 
 ## Highlights
 
-- Synthetic longitudinal patient simulator with daily health, behavior, and sensor-style variables.
-- Scenario-specific causal graphs for sleep, screen time, steps, fatigue, medication adherence, blood pressure, stress, and nighttime eating.
-- MCP tools for simulation, data summaries, DAG generation, adjustment-set checks, causal effect estimation, target trial emulation, intervention simulation, and export.
+- Static 100-day N-of-1 patient dataset committed in the repository.
+- Wearable, phone, communication, location, motion, smart-home, calendar, and synthetic financial features.
+- MCP tools for dataset discovery, data summaries, DAG generation, adjustment-set checks, causal effect estimation, target trial emulation, intervention simulation, and export.
 - Practical causal estimators: regression adjustment, inverse probability weighting, g-formula, and simple doubly robust AIPW.
-- In-memory dataset registry for multi-step assistant workflows, plus stateless support through raw records.
+- Default dataset is loaded into memory when the MCP server starts.
+- Tools also accept raw records for stateless workflows or future real-data integration.
 - Designed for future integration with Home Assistant, Fitbit, phone sensors, smart plugs, pantry sensors, refrigerator sensors, medication cabinet sensors, and blood pressure readings.
 
-## Quick Example
+## Bundled Dataset
 
-An MCP-capable assistant can run the following workflow:
-
-1. Simulate 180 days of a patient where late-night phone use affects sleep.
-2. Show the scenario DAG and suggested adjustment set.
-3. Estimate the effect of reducing late-night screen time below 30 minutes.
-4. Simulate an intervention that reduces late-night screen time by 60 minutes.
-5. Export the synthetic dataset as CSV.
-
-Example causal interpretation returned by the server:
+Default dataset:
 
 ```text
-On this simulated patient dataset, late_night_screen_minutes <= 30 was estimated
-to produce higher outcome_sleep_quality than late_night_screen_minutes > 30,
-using g_formula and adjusting for stress_score, caffeine_mg,
-prior_sleep_quality, and steps. The estimate depends on the causal assumptions
-and the simulated data-generating process.
+dataset_id: patient_001_100_days
+patient_id: patient-001
+days: 100
+date range: 2026-01-01 to 2026-04-10
+scenario: mixed_lifestyle
 ```
+
+The dataset contains 85 daily columns, including:
+
+| Domain | Example Variables |
+| --- | --- |
+| Wearables | `sleep_duration_hours`, `sleep_efficiency`, `awakenings`, `steps`, `heart_rate_variability_ms`, `calories_burned`, `spo2_percent`, `skin_temperature_c` |
+| Phone and apps | `phone_pickups`, `unlocks`, `notifications`, `app_usage_minutes`, `total_screen_time_minutes`, `social_app_minutes`, `productivity_app_minutes`, `finance_app_minutes`, `entertainment_app_minutes` |
+| Communication | `texts_sent`, `texts_received`, `calls_made`, `calls_received`, `call_duration_minutes` |
+| Location | `location_home_minutes`, `location_work_minutes`, `away_from_home_minutes`, `home_wifi_minutes`, `distance_traveled_km`, `commute_minutes`, `gps_radius_meters`, `significant_location_changes` |
+| Motion sensors | `motion_stationary_minutes`, `motion_walking_minutes`, `motion_running_minutes`, `motion_driving_minutes`, `accelerometer_activity_counts` |
+| Smart home | `pantry_door_opens`, `refrigerator_door_opens`, `smart_plug_tv_minutes`, `smart_plug_kettle_uses`, `medication_cabinet_opens` |
+| Financial | `transactions_count`, `card_spend_usd`, `cash_withdrawal_usd`, `grocery_spend_usd`, `restaurant_spend_usd`, `alcohol_spend_usd`, `ride_share_spend_usd`, `online_purchase_count` |
+| Calendar and context | `work_calendar_events`, `meeting_minutes`, `intervention_received`, `stress_score`, `mood_score`, `pain_score` |
+| Outcomes | `outcome_sleep_quality`, `outcome_next_day_fatigue`, `outcome_mood_next_day`, `outcome_bp_next_day` |
 
 ## Why MCP
 
-MCP gives an AI assistant a disciplined interface to the simulator and causal engine. Instead of inventing data or doing informal spreadsheet reasoning, the assistant calls explicit tools with structured inputs and auditable outputs.
+MCP gives an AI assistant a disciplined interface to causal analysis code. Instead of inventing data or doing informal spreadsheet reasoning, the assistant calls explicit tools with structured inputs and auditable outputs.
 
 This makes it easier to:
 
-- generate reproducible synthetic data with a known data-generating process
+- discover the bundled patient dataset
+- summarize the available signals before analysis
 - inspect the assumed causal graph before estimating effects
 - align exposures, covariates, and outcomes over time
 - return assumptions, diagnostics, and plain-language explanations
-- later swap synthetic data for real device or Home Assistant history data
+- later point the same analysis tools at real device or Home Assistant history data
 
 ## Installation
 
@@ -86,8 +100,6 @@ The server uses stdio transport through the Python MCP SDK:
 from mcp.server.fastmcp import FastMCP
 ```
 
-If the SDK changes this import path, the core package still works; update `create_mcp_server()` in `src/patient_causal_mcp/server.py`.
-
 ### MCP Host Configuration
 
 Use this configuration pattern for an MCP host that launches local stdio servers:
@@ -104,8 +116,8 @@ Use this configuration pattern for an MCP host that launches local stdio servers
 
 | Tool | Purpose |
 | --- | --- |
-| `simulate_patient_data` | Generate a synthetic longitudinal N-of-1 dataset and store it in memory under a `dataset_id`. |
-| `get_available_scenarios` | List supported scenarios, causal questions, exposures, outcomes, confounders, mediators, and interpretations. |
+| `get_available_datasets` | List bundled static datasets and the default `dataset_id`. |
+| `get_available_scenarios` | List supported causal scenarios, questions, exposures, outcomes, confounders, mediators, and interpretations. |
 | `describe_patient_data` | Summarize missingness, numeric distributions, binary counts, correlations, and time trends. |
 | `propose_causal_question` | Suggest clinically meaningful causal questions from the available variables. |
 | `estimate_causal_effect` | Estimate effects using regression adjustment, IPW, g-formula, or simple doubly robust AIPW. |
@@ -115,7 +127,7 @@ Use this configuration pattern for an MCP host that launches local stdio servers
 | `simulate_intervention` | Predict what could happen under a behavioral or medication-related intervention. |
 | `export_dataset` | Export the dataset as CSV text or JSON records. |
 
-## Supported Scenarios
+## Supported Causal Scenarios
 
 | Scenario | Exposure | Outcome | Core Question |
 | --- | --- | --- | --- |
@@ -128,51 +140,65 @@ Use this configuration pattern for an MCP host that launches local stdio servers
 
 ## Example Tool Calls
 
-### Simulate Patient Data
+### Discover Bundled Datasets
 
 ```json
 {
-  "patient_id": "demo-patient",
-  "n_days": 180,
-  "start_date": "2026-01-01",
-  "seed": 42,
-  "scenario": "sleep_screen_time"
+  "tool": "get_available_datasets",
+  "arguments": {}
 }
 ```
 
-Returns:
+Example response fields:
 
-- `dataset_id`
-- `patient_id`
-- `scenario`
-- `n_days`
-- `variable_descriptions`
-- `causal_graph_edges`
-- `data_preview`
-- `full_data`
-- `warnings`
+- `default_dataset_id`
+- `datasets`
+- `loaded_dataset_ids`
+
+### Summarize The Default Patient Data
+
+`dataset_id` can be omitted to use `patient_001_100_days`.
+
+```json
+{
+  "tool": "describe_patient_data",
+  "arguments": {
+    "variables": [
+      "sleep_duration_hours",
+      "steps",
+      "late_night_screen_minutes",
+      "texts_sent",
+      "card_spend_usd",
+      "outcome_sleep_quality"
+    ]
+  }
+}
+```
 
 ### Estimate A Causal Effect
 
 ```json
 {
-  "dataset_id": "<dataset_id>",
-  "exposure": "late_night_screen_minutes",
-  "outcome": "outcome_sleep_quality",
-  "treatment_rule": {
-    "type": "binary_threshold",
-    "variable": "late_night_screen_minutes",
-    "threshold": 30,
-    "treated_condition": "<="
-  },
-  "adjustment_variables": [
-    "stress_score",
-    "caffeine_mg",
-    "prior_sleep_quality",
-    "steps"
-  ],
-  "method": "g_formula",
-  "bootstrap": false
+  "tool": "estimate_causal_effect",
+  "arguments": {
+    "dataset_id": "patient_001_100_days",
+    "exposure": "late_night_screen_minutes",
+    "outcome": "outcome_sleep_quality",
+    "treatment_rule": {
+      "type": "binary_threshold",
+      "variable": "late_night_screen_minutes",
+      "threshold": 120,
+      "treated_condition": "<="
+    },
+    "adjustment_variables": [
+      "stress_score",
+      "caffeine_mg",
+      "prior_sleep_quality",
+      "steps"
+    ],
+    "method": "g_formula",
+    "bootstrap": false
+  }
 }
 ```
 
@@ -187,7 +213,10 @@ Supported methods:
 
 ```json
 {
-  "scenario": "sleep_screen_time"
+  "tool": "generate_causal_dag",
+  "arguments": {
+    "scenario": "sleep_screen_time"
+  }
 }
 ```
 
@@ -205,35 +234,38 @@ Returns:
 
 ```json
 {
-  "dataset_id": "<dataset_id>",
-  "eligibility_criteria": {
-    "prior_sleep_quality": { "max": 8 }
-  },
-  "treatment_strategies": [
-    {
-      "name": "Reminder at 8 PM",
-      "type": "binary_variable",
-      "variable": "intervention_received",
-      "value": 1
+  "tool": "run_target_trial_emulation",
+  "arguments": {
+    "dataset_id": "patient_001_100_days",
+    "eligibility_criteria": {
+      "prior_sleep_quality": { "max": 8 }
     },
-    {
-      "name": "No reminder",
-      "type": "binary_variable",
-      "variable": "intervention_received",
-      "value": 0
-    }
-  ],
-  "assignment_time": "8 PM before the sleep episode",
-  "follow_up_days": 1,
-  "outcome": "outcome_sleep_quality",
-  "adjustment_variables": [
-    "stress_score",
-    "prior_sleep_quality",
-    "prior_fatigue",
-    "day_of_week",
-    "baseline_phone_use"
-  ],
-  "method": "g_formula"
+    "treatment_strategies": [
+      {
+        "name": "Reminder at 8 PM",
+        "type": "binary_variable",
+        "variable": "intervention_received",
+        "value": 1
+      },
+      {
+        "name": "No reminder",
+        "type": "binary_variable",
+        "variable": "intervention_received",
+        "value": 0
+      }
+    ],
+    "assignment_time": "8 PM before the sleep episode",
+    "follow_up_days": 1,
+    "outcome": "outcome_sleep_quality",
+    "adjustment_variables": [
+      "stress_score",
+      "prior_sleep_quality",
+      "prior_fatigue",
+      "day_of_week",
+      "baseline_phone_use"
+    ],
+    "method": "g_formula"
+  }
 }
 ```
 
@@ -241,18 +273,21 @@ Returns:
 
 ```json
 {
-  "dataset_id": "<dataset_id>",
-  "intervention_name": "Reduce late-night screen time by 60 minutes",
-  "intervention_rule": { "operation": "add" },
-  "target_variable": "late_night_screen_minutes",
-  "expected_change": -60,
-  "outcome": "outcome_sleep_quality",
-  "adjustment_variables": [
-    "stress_score",
-    "caffeine_mg",
-    "prior_sleep_quality",
-    "steps"
-  ]
+  "tool": "simulate_intervention",
+  "arguments": {
+    "dataset_id": "patient_001_100_days",
+    "intervention_name": "Reduce late-night screen time by 60 minutes",
+    "intervention_rule": { "operation": "add" },
+    "target_variable": "late_night_screen_minutes",
+    "expected_change": -60,
+    "outcome": "outcome_sleep_quality",
+    "adjustment_variables": [
+      "stress_score",
+      "caffeine_mg",
+      "prior_sleep_quality",
+      "steps"
+    ]
+  }
 }
 ```
 
@@ -286,14 +321,18 @@ patient-causal-mcp/
     patient_causal_mcp/
       __init__.py
       server.py
+      datasets.py
       simulator.py
       scenarios.py
       causal_engine.py
       dag.py
       schemas.py
       utils.py
+      data/
+        patient_001_100_days.csv
+        patient_001_100_days_metadata.json
   tests/
-    test_simulator.py
+    test_bundled_dataset.py
     test_causal_engine.py
     test_dag.py
 ```
@@ -301,65 +340,14 @@ patient-causal-mcp/
 Core modules:
 
 - `server.py`: MCP tool registration and in-memory dataset registry.
-- `simulator.py`: longitudinal synthetic patient simulator.
+- `datasets.py`: package-data loader and bundled dataset metadata.
 - `scenarios.py`: scenario metadata, variable dictionary, DAG edges, and default adjustment sets.
 - `causal_engine.py`: descriptive summaries, causal estimators, target trial emulation, intervention simulation, and export.
 - `dag.py`: DAG serialization and practical adjustment-set checks.
 - `schemas.py`: Pydantic models for tool inputs.
 - `utils.py`: shared validation and data conversion helpers.
 
-## Simulated Variables
-
-The simulator generates daily values such as:
-
-- `sleep_duration_hours`
-- `sleep_efficiency`
-- `awakenings`
-- `steps`
-- `sedentary_minutes`
-- `active_minutes`
-- `late_night_screen_minutes`
-- `caffeine_mg`
-- `alcohol_units`
-- `medication_adherence`
-- `stress_score`
-- `mood_score`
-- `pain_score`
-- `blood_pressure_systolic`
-- `blood_pressure_diastolic`
-- `resting_heart_rate`
-- `morning_fatigue`
-- `nighttime_eating`
-- `pantry_door_opens`
-- `refrigerator_door_opens`
-- `phone_pickups`
-- `app_usage_minutes`
-- `intervention_received`
-- `outcome_sleep_quality`
-- `outcome_next_day_fatigue`
-- `outcome_mood_next_day`
-- `outcome_bp_next_day`
-
-The generated data also include patient-level baseline traits:
-
-- `baseline_sleep_need`
-- `baseline_activity_level`
-- `baseline_stress_tendency`
-- `baseline_bp`
-- `baseline_phone_use`
-- `baseline_adherence`
-
-## Causal Logic
-
-The simulator includes autoregressive and lagged mechanisms:
-
-- stress today partly depends on stress yesterday
-- late-night screen time depends on stress, prior sleep, baseline phone use, and reminders
-- sleep quality depends on screen time, caffeine, stress, awakenings, sleep duration, and activity
-- next-day fatigue is aligned as the next row's morning fatigue
-- blood pressure depends on medication adherence, stress, caffeine, activity, and prior blood pressure
-
-The estimators are intentionally practical rather than overbuilt. OLS, weighted OLS, and logistic propensity scores are implemented with NumPy/Pandas so the package can run in constrained local environments without compiled statistical dependencies.
+`simulator.py` remains as a development utility for creating synthetic data variants, but it is not registered as an MCP tool.
 
 ## Development
 
@@ -374,7 +362,6 @@ Run a local MCP smoke test from Python:
 ```bash
 python - <<'PY'
 import asyncio
-import json
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -393,26 +380,31 @@ asyncio.run(main())
 PY
 ```
 
+Expected tools include `get_available_datasets`; they do not include `simulate_patient_data`.
+
 ## Home Assistant Integration Notes
 
-This version does not require Home Assistant. The simulator creates synthetic versions of variables that could later come from Home Assistant history, Fitbit, phone sensors, and smart-home entities.
+This version does not require Home Assistant. The bundled dataset includes synthetic versions of variables that could later come from Home Assistant history, Fitbit, phone sensors, and smart-home entities.
 
 Possible future entity mappings:
 
 - Fitbit sleep sensors -> `sleep_duration_hours`, `sleep_efficiency`, `awakenings`
 - step counters -> `steps`, `active_minutes`, `sedentary_minutes`
-- phone usage sensors -> `late_night_screen_minutes`, `phone_pickups`, `app_usage_minutes`
+- phone usage sensors -> `late_night_screen_minutes`, `phone_pickups`, `app_usage_minutes`, `texts_sent`, `calls_made`
+- location sensors -> `location_home_minutes`, `location_work_minutes`, `distance_traveled_km`
+- motion sensors -> `motion_walking_minutes`, `motion_driving_minutes`, `accelerometer_activity_counts`
 - pantry door sensors -> `pantry_door_opens`
 - refrigerator door sensors -> `refrigerator_door_opens`
-- smart plug current sensors -> appliance usage markers or bedtime routine markers
-- medication cabinet sensors -> `medication_adherence`
+- smart plug current sensors -> `smart_plug_tv_minutes`, `smart_plug_kettle_uses`
+- medication cabinet sensors -> `medication_adherence`, `medication_cabinet_opens`
 - blood pressure readings -> `blood_pressure_systolic`, `blood_pressure_diastolic`
+- financial exports -> `transactions_count`, `card_spend_usd`, `restaurant_spend_usd`
 
 The same causal analysis tools could later be pointed at real Home Assistant history data after time alignment, missingness handling, consent/privacy review, and unit normalization.
 
 ## Important Limitations
 
-- This is synthetic data.
+- The bundled patient data are synthetic.
 - Results are not medical advice.
 - Causal estimates depend on assumptions.
 - No unmeasured confounding is generally untestable.
@@ -420,5 +412,6 @@ The same causal analysis tools could later be pointed at real Home Assistant his
 - Small N-of-1 datasets can be noisy.
 - The models are simple parametric prototypes.
 - The adjustment-set checker is practical guidance, not a formal d-separation engine.
+- Financial variables are synthetic demonstration fields, not real financial advice inputs.
 - Real sensor data would require careful validation, missingness handling, privacy safeguards, and clinical review.
 - The tool is for demonstration, research prototyping, and educational use.

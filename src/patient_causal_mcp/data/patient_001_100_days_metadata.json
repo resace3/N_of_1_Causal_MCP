@@ -1,0 +1,12 @@
+{
+  "dataset_id": "patient_001_100_days",
+  "patient_id": "patient-001",
+  "scenario": "mixed_lifestyle",
+  "n_days": 100,
+  "date_range": {
+    "start": "2026-01-01",
+    "end": "2026-04-10"
+  },
+  "description": "Static synthetic 100-day N-of-1 dataset with wearable, phone, location, motion, smart-home, communication, calendar, and financial variables.",
+  "source": "Bundled demonstration dataset stored in the repository; no MCP simulation tool is exposed."
+}

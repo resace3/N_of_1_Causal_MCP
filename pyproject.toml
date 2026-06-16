@@ -30,6 +30,9 @@ patient-causal-mcp = "patient_causal_mcp.server:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+patient_causal_mcp = ["data/*.csv", "data/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
