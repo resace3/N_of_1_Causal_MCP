@@ -79,6 +79,9 @@ def test_mcp_stdio_session_can_call_core_tools() -> None:
                     await session.call_tool("get_available_datasets", arguments={})
                 )
                 assert datasets["default_dataset_id"] == "patient_001_100_days"
+                dataset_ids = {item["dataset_id"] for item in datasets["datasets"]}
+                assert "patient_001_100_days" in dataset_ids
+                assert "patient_001_raw_events_30_days" in dataset_ids
 
                 summary = _parse_tool_result(
                     await session.call_tool(

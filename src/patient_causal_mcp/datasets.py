@@ -9,6 +9,7 @@ from typing import Any
 
 import pandas as pd
 
+from patient_causal_mcp.raw_events import RAW_EVENT_DATASET_ID
 from patient_causal_mcp.utils import dataframe_to_records
 
 
@@ -29,7 +30,12 @@ BUNDLED_DATASETS: dict[str, BundledDataset] = {
         dataset_id=DEFAULT_DATASET_ID,
         filename="patient_001_100_days.csv",
         metadata_filename="patient_001_100_days_metadata.json",
-    )
+    ),
+    RAW_EVENT_DATASET_ID: BundledDataset(
+        dataset_id=RAW_EVENT_DATASET_ID,
+        filename="patient_001_raw_events_30_days.csv",
+        metadata_filename="patient_001_raw_events_30_days_metadata.json",
+    ),
 }
 
 

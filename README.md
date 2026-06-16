@@ -7,11 +7,12 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](pyproject.toml)
 [![Repository](https://img.shields.io/badge/GitHub-resace3%2FN__of__1__Causal__MCP-black.svg)](https://github.com/resace3/N_of_1_Causal_MCP)
 
-`patient-causal-mcp` is a local Model Context Protocol server for N-of-1 digital health causal analysis. It ships with a static 100-day single-patient dataset and exposes MCP tools that let an AI assistant summarize the data, inspect causal assumptions, run causal analyses, emulate target trials, simulate interventions, and export results.
+`patient-causal-mcp` is a local Model Context Protocol server for N-of-1 digital health causal analysis. It ships with a static raw 30-day sensor/event dataset, a static 100-day analysis-ready patient dataset, and MCP tools that let an AI assistant summarize the data, inspect causal assumptions, run causal analyses, emulate target trials, simulate interventions, and export results.
 
 This repository does **not** expose a `simulate_patient_data` MCP tool. The patient dataset is already present in the repo at:
 
 ```text
+src/patient_causal_mcp/data/patient_001_raw_events_30_days.csv
 src/patient_causal_mcp/data/patient_001_100_days.csv
 ```
 
@@ -19,7 +20,8 @@ The data are synthetic and manually bundled for demonstration, research prototyp
 
 ## Highlights
 
-- Static 100-day N-of-1 patient dataset committed in the repository.
+- Static 30-day raw Home Assistant-like event dataset committed in the repository.
+- Static 100-day N-of-1 analysis dataset committed in the repository.
 - Wearable, phone, communication, location, motion, smart-home, calendar, and synthetic financial features.
 - MCP tools for dataset discovery, data summaries, DAG generation, adjustment-set checks, causal effect estimation, target trial emulation, intervention simulation, and export.
 - Practical causal estimators: regression adjustment, inverse probability weighting, g-formula, and simple doubly robust AIPW.
@@ -27,9 +29,32 @@ The data are synthetic and manually bundled for demonstration, research prototyp
 - Tools also accept raw records for stateless workflows or future real-data integration.
 - Designed for future integration with Home Assistant, Fitbit, phone sensors, smart plugs, pantry sensors, refrigerator sensors, medication cabinet sensors, and blood pressure readings.
 
-## Bundled Dataset
+## Bundled Datasets
 
-Default dataset:
+Raw event dataset:
+
+```text
+dataset_id: patient_001_raw_events_30_days
+patient_id: patient-001
+days: 30
+rows: 3,240
+unique entity_id values: 108
+date range: 2026-01-01 to 2026-01-30
+format: timestamp,patient_id,entity_id,state,unit,source,domain
+```
+
+The raw event CSV is intentionally long format. Each row is one timestamped observation for one raw sensor or event entity:
+
+```csv
+timestamp,patient_id,entity_id,state,unit,source,domain
+2026-01-01 00:00:57,patient-001,phone_battery_level,72,percent,phone,device
+2026-01-01 05:38:10,patient-001,phone_app_foreground_package,com.spotify.music,none,phone,app_usage
+2026-01-01 15:10:22,patient-001,pantry_door_contact_state,closed,none,smart_home,contact
+```
+
+The raw file keeps entity IDs as row values in `entity_id`. It does not contain daily aggregate columns such as `total_screen_time_minutes`, `pantry_open_count`, `mean_heart_rate`, or `sleep_duration_hours`.
+
+Analysis-ready daily dataset:
 
 ```text
 dataset_id: patient_001_100_days
@@ -39,7 +64,7 @@ date range: 2026-01-01 to 2026-04-10
 scenario: mixed_lifestyle
 ```
 
-The dataset contains 85 daily columns, including:
+The daily dataset contains 85 engineered columns for causal examples, including:
 
 | Domain | Example Variables |
 | --- | --- |
@@ -358,7 +383,7 @@ Run tests:
 pytest
 ```
 
-The pytest suite includes more than 400 collected checks covering the bundled dataset contract, variable dictionary, realistic ranges, MCP tool registration, stdio MCP calls, causal estimators, DAG helpers, and examples.
+The pytest suite includes more than 700 collected checks covering the bundled daily dataset contract, raw event dataset contract, required `entity_id` coverage, variable dictionary, realistic ranges, MCP tool registration, stdio MCP calls, causal estimators, DAG helpers, and examples.
 
 Run a local MCP smoke test from Python:
 

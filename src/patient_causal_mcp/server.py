@@ -37,8 +37,10 @@ ENGINE = CausalAnalysisEngine()
 def _ensure_bundled_datasets_loaded() -> None:
     """Load bundled static datasets into the in-memory registry if needed."""
 
-    if DEFAULT_DATASET_ID not in DATASET_REGISTRY:
-        DATASET_REGISTRY[DEFAULT_DATASET_ID] = load_bundled_dataset(DEFAULT_DATASET_ID)
+    for item in get_bundled_dataset_metadata():
+        dataset_id = item["dataset_id"]
+        if dataset_id not in DATASET_REGISTRY:
+            DATASET_REGISTRY[dataset_id] = load_bundled_dataset(dataset_id)
 
 
 def _records_from_input(dataset_id: str | None, data_records: list[dict[str, Any]] | None) -> list[dict[str, Any]]:

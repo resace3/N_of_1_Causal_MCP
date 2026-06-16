@@ -1,0 +1,15 @@
+{
+  "dataset_id": "patient_001_raw_events_30_days",
+  "patient_id": "patient-001",
+  "dataset_type": "raw_events_long_format",
+  "n_days": 30,
+  "n_rows": 3240,
+  "n_unique_entity_ids": 108,
+  "date_range": {
+    "start": "2026-01-01",
+    "end": "2026-01-30"
+  },
+  "description": "Static 30-day Home Assistant-like raw event dataset with one timestamp, one entity_id, and one state value per row.",
+  "format": "timestamp,patient_id,entity_id,state,unit,source,domain",
+  "source": "Bundled demonstration raw event dataset stored in the repository; entity IDs are row values, not daily feature columns."
+}

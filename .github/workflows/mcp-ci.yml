@@ -104,6 +104,8 @@ jobs:
 
                       datasets = parse_result(await session.call_tool("get_available_datasets", arguments={}))
                       assert datasets["default_dataset_id"] == "patient_001_100_days"
+                      dataset_ids = {item["dataset_id"] for item in datasets["datasets"]}
+                      assert "patient_001_raw_events_30_days" in dataset_ids
 
                       summary = parse_result(await session.call_tool("describe_patient_data", arguments={}))
                       assert summary["number_of_days"] == 100
@@ -171,6 +173,12 @@ jobs:
           assert "card_spend_usd" in records[0]
           assert "texts_sent" in records[0]
           assert "motion_walking_minutes" in records[0]
+
+          from patient_causal_mcp.raw_events import RAW_EVENT_COLUMNS, RAW_EVENT_DATASET_ID
+
+          raw_records = load_bundled_dataset(RAW_EVENT_DATASET_ID)
+          assert len(raw_records) == 3240
+          assert list(raw_records[0]) == RAW_EVENT_COLUMNS
           PY
 
   examples:
