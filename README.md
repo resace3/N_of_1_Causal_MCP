@@ -1,8 +1,9 @@
 # N-of-1 Causal MCP
 
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![MCP Server](https://img.shields.io/badge/MCP-server-6f42c1.svg)](https://modelcontextprotocol.io/)
 [![MCP CI](https://github.com/resace3/N_of_1_Causal_MCP/actions/workflows/mcp-ci.yml/badge.svg)](https://github.com/resace3/N_of_1_Causal_MCP/actions/workflows/mcp-ci.yml)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020.svg)](https://developers.cloudflare.com/workers/)
 [![Tests](https://img.shields.io/badge/tests-pytest-0a7f44.svg)](https://docs.pytest.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](pyproject.toml)
 [![Repository](https://img.shields.io/badge/GitHub-resace3%2FN__of__1__Causal__MCP-black.svg)](https://github.com/resace3/N_of_1_Causal_MCP)
@@ -101,13 +102,6 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-If your environment does not support extras:
-
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
-
 ## Run The MCP Server
 
 ```bash
@@ -137,6 +131,34 @@ Use this configuration pattern for an MCP host that launches local stdio servers
   "cwd": "/path/to/N_of_1_Causal_MCP"
 }
 ```
+
+## Cloudflare Remote MCP
+
+The same Python MCP tool surface can also run as an authless Cloudflare Python Worker using Streamable HTTP:
+
+```text
+https://remote-mcp-server-authless.resace3.workers.dev/mcp
+```
+
+The local stdio entrypoint remains unchanged. Cloudflare deployment is additive and uses `src/worker.py` plus the same `patient_causal_mcp.server.create_mcp_server` tool registration path.
+
+Quick local Worker test:
+
+```bash
+npm install
+uv run pywrangler dev
+```
+
+Then connect MCP Inspector with:
+
+```text
+Transport: Streamable HTTP
+URL: http://localhost:8787/mcp
+```
+
+Full deployment instructions are in [CLOUDFLARE.md](CLOUDFLARE.md).
+
+Security note: the configured Worker is authless for demonstration. Do not connect private Home Assistant, wearable, phone, financial, or clinical datasets until authentication is added.
 
 ## Tool Inventory
 
@@ -337,13 +359,20 @@ This bypasses an MCP host and calls the same tool functions directly.
 
 ```text
 patient-causal-mcp/
+  CLOUDFLARE.md
   README.md
+  package.json
   pyproject.toml
-  requirements.txt
+  wrangler.jsonc
   examples/
     example_client.py
     example_prompts.md
+  scripts/
+    cf-deploy.sh
   src/
+    asgi.py
+    uvicorn.py
+    worker.py
     patient_causal_mcp/
       __init__.py
       server.py
@@ -355,17 +384,27 @@ patient-causal-mcp/
       schemas.py
       utils.py
       data/
+        patient_001_raw_events_30_days.csv
+        patient_001_raw_events_30_days_metadata.json
         patient_001_100_days.csv
         patient_001_100_days_metadata.json
   tests/
     test_bundled_dataset.py
     test_causal_engine.py
+    test_cloudflare_worker_imports.py
     test_dag.py
+    test_dataset_contract.py
+    test_mcp_server_factory.py
+    test_mcp_tool_contract.py
+    test_raw_event_dataset.py
 ```
 
 Core modules:
 
 - `server.py`: MCP tool registration and in-memory dataset registry.
+- `worker.py`: Cloudflare Python Worker entrypoint for `/`, `/health`, and `/mcp`.
+- `asgi.py`: minimal Cloudflare Request/Response to ASGI bridge for Streamable HTTP.
+- `uvicorn.py`: Worker compatibility shim for optional SDK imports.
 - `datasets.py`: package-data loader and bundled dataset metadata.
 - `scenarios.py`: scenario metadata, variable dictionary, DAG edges, and default adjustment sets.
 - `causal_engine.py`: descriptive summaries, causal estimators, target trial emulation, intervention simulation, and export.

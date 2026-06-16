@@ -6,21 +6,10 @@ import json
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from patient_causal_mcp.server import create_mcp_server
+from patient_causal_mcp.server import TOOL_NAMES, create_mcp_server
 
 
-EXPECTED_TOOL_NAMES = [
-    "get_available_datasets",
-    "get_available_scenarios",
-    "describe_patient_data",
-    "propose_causal_question",
-    "estimate_causal_effect",
-    "run_target_trial_emulation",
-    "generate_causal_dag",
-    "check_adjustment_set",
-    "simulate_intervention",
-    "export_dataset",
-]
+EXPECTED_TOOL_NAMES = TOOL_NAMES
 
 
 def _tool_names_from_server() -> set[str]:

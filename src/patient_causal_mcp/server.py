@@ -32,6 +32,18 @@ except Exception:  # pragma: no cover - exercised only when the MCP SDK is unava
 
 DATASET_REGISTRY: dict[str, list[dict[str, Any]]] = {}
 ENGINE = CausalAnalysisEngine()
+TOOL_NAMES: list[str] = [
+    "get_available_datasets",
+    "get_available_scenarios",
+    "describe_patient_data",
+    "propose_causal_question",
+    "estimate_causal_effect",
+    "run_target_trial_emulation",
+    "generate_causal_dag",
+    "check_adjustment_set",
+    "simulate_intervention",
+    "export_dataset",
+]
 
 
 def _ensure_bundled_datasets_loaded() -> None:
@@ -277,15 +289,41 @@ def export_dataset(
     return ENGINE.export_dataset(records, format=request.format)
 
 
-def create_mcp_server() -> Any:
-    """Create the MCP server instance and register all tools."""
+def _new_fastmcp_server(*, stateless_http: bool, json_response: bool) -> Any:
+    """Construct FastMCP while tolerating older SDK keyword support."""
 
     if FastMCP is None:
         raise RuntimeError(
             "The MCP SDK is not installed or its import path changed. Install dependencies with "
             "`pip install -e .` and verify `mcp.server.fastmcp.FastMCP` is available."
         )
-    mcp = FastMCP("patient-causal-mcp")
+
+    kwargs: dict[str, Any] = {}
+    if stateless_http:
+        kwargs["stateless_http"] = True
+    if json_response:
+        kwargs["json_response"] = True
+
+    try:
+        return FastMCP("patient-causal-mcp", **kwargs)
+    except TypeError:
+        # Older Python MCP SDK versions may not support one or both HTTP kwargs.
+        # Retry progressively while keeping tool registration unchanged.
+        for fallback_kwargs in (
+            {"stateless_http": kwargs.get("stateless_http", False)},
+            {"json_response": kwargs.get("json_response", False)},
+            {},
+        ):
+            fallback_kwargs = {key: value for key, value in fallback_kwargs.items() if value}
+            try:
+                return FastMCP("patient-causal-mcp", **fallback_kwargs)
+            except TypeError:
+                continue
+        raise
+
+
+def _register_tools(mcp: Any) -> Any:
+    """Register all MCP tools exactly once on a FastMCP instance."""
 
     _ensure_bundled_datasets_loaded()
     mcp.tool()(get_available_datasets)
@@ -299,6 +337,23 @@ def create_mcp_server() -> Any:
     mcp.tool()(simulate_intervention)
     mcp.tool()(export_dataset)
     return mcp
+
+
+def create_mcp_server(
+    *,
+    stateless_http: bool = False,
+    json_response: bool = False,
+) -> Any:
+    """Create the MCP server instance and register all tools."""
+
+    mcp = _new_fastmcp_server(stateless_http=stateless_http, json_response=json_response)
+    return _register_tools(mcp)
+
+
+def create_cloudflare_mcp_server() -> Any:
+    """Create an MCP server configured for Cloudflare Streamable HTTP."""
+
+    return create_mcp_server(stateless_http=True, json_response=True)
 
 
 def main() -> None:

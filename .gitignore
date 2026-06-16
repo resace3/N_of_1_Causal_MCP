@@ -3,8 +3,12 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .venv/
+.venv-workers/
 venv/
 dist/
 build/
+node_modules/
+python_modules/
+.wrangler/
 .mypy_cache/
 .ruff_cache/

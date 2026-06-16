@@ -7,7 +7,7 @@ name = "patient-causal-mcp"
 version = "0.1.0"
 description = "MCP server for bundled N-of-1 patient data and causal analysis."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
   { name = "Patient Causal MCP Contributors" }
@@ -16,12 +16,22 @@ dependencies = [
   "mcp>=1.0.0",
   "numpy>=1.24",
   "pandas>=2.0",
-  "pydantic>=2.0"
+  "pydantic>=2.0",
+  "starlette>=0.27"
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.0"
+  "pytest>=8.0",
+  "ruff>=0.6"
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "workers-py",
+  "workers-runtime-sdk"
 ]
 
 [project.scripts]
