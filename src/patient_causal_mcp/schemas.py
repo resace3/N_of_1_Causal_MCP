@@ -27,7 +27,9 @@ class EstimateCausalEffectInput(DataInput):
     outcome: str
     treatment_rule: dict[str, Any]
     adjustment_variables: list[str] = Field(default_factory=list)
-    method: Literal["regression_adjustment", "ipw", "g_formula", "doubly_robust"] = "regression_adjustment"
+    method: Literal["regression_adjustment", "ipw", "g_formula", "doubly_robust"] = (
+        "regression_adjustment"
+    )
     lag_exposure_days: int = 0
     lag_outcome_days: int = 0
     bootstrap: bool = False

@@ -1,4 +1,8 @@
-from patient_causal_mcp.datasets import DEFAULT_DATASET_ID, get_bundled_dataset_metadata, load_bundled_dataset
+from patient_causal_mcp.datasets import (
+    DEFAULT_DATASET_ID,
+    get_bundled_dataset_metadata,
+    load_bundled_dataset,
+)
 from patient_causal_mcp.scenarios import SCENARIOS
 from patient_causal_mcp.server import create_mcp_server, get_available_datasets
 

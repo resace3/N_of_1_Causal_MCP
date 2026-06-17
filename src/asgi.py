@@ -1,16 +1,30 @@
-"""Minimal ASGI bridge for Cloudflare Python Workers.
+"""Small ASGI bridge for Cloudflare Python Workers.
 
-Cloudflare Python Workers expose JavaScript Request/Response objects, while the
-Python MCP SDK returns an ASGI application for Streamable HTTP. This module
-adapts between those two interfaces without introducing a web framework.
+FastMCP exposes Streamable HTTP as an ASGI app. Cloudflare Python Workers expose
+Fetch-style Request/Response objects. This module adapts one request at a time
+without adding FastAPI or another web framework.
+
+The bridge intentionally collects ASGI response bodies instead of implementing
+long-lived event-stream resumability. The MCP server is configured with
+``json_response=True`` for Cloudflare so normal MCP initialize/list/call flows
+produce finite JSON responses that work with this bridge.
 """
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlsplit
+
+
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": (
+        "Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version"
+    ),
+    "Access-Control-Expose-Headers": "Mcp-Session-Id",
+}
 
 
 def _headers_to_scope(headers: Any) -> list[tuple[bytes, bytes]]:
@@ -46,108 +60,39 @@ async def _read_request_body(request: Any) -> bytes:
     return b""
 
 
-def _response_headers(headers: list[tuple[bytes, bytes]]) -> Any:
-    """Create JS Headers from ASGI response headers."""
+def _response_headers(headers: list[tuple[bytes, bytes]]) -> dict[str, str]:
+    """Convert ASGI response headers to a plain mapping for workers.Response."""
 
-    from js import Headers
-
-    js_headers = Headers.new()
+    output: dict[str, str] = {}
     for key, value in headers:
-        js_headers.append(key.decode("latin-1"), value.decode("latin-1"))
-    return js_headers
+        output[key.decode("latin-1")] = value.decode("latin-1")
+    output.update(CORS_HEADERS)
+    return output
 
 
-def _append_cors(headers: Any) -> Any:
-    """Append permissive CORS headers for MCP Inspector testing."""
+def _response(body: bytes, *, status: int, headers: dict[str, str]) -> Any:
+    """Create a Cloudflare Worker response."""
 
-    headers.set("Access-Control-Allow-Origin", "*")
-    headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-    headers.set(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version",
-    )
-    headers.set("Access-Control-Expose-Headers", "Mcp-Session-Id")
-    return headers
+    try:
+        from workers import Response
 
+        return Response(body, status=status, headers=headers)
+    except Exception:
+        from js import Response
 
-async def _run_asgi_collect(app: Any, scope: dict[str, Any], body: bytes) -> tuple[int, Any, bytes]:
-    """Run an ASGI app and collect a non-streaming response."""
-
-    response_status = 500
-    response_headers: list[tuple[bytes, bytes]] = []
-    chunks: list[bytes] = []
-    received = False
-
-    async def receive() -> dict[str, Any]:
-        nonlocal received
-        if not received:
-            received = True
-            return {"type": "http.request", "body": body, "more_body": False}
-        return {"type": "http.disconnect"}
-
-    async def send(message: dict[str, Any]) -> None:
-        nonlocal response_status, response_headers
-        if message["type"] == "http.response.start":
-            response_status = int(message["status"])
-            response_headers = list(message.get("headers", []))
-        elif message["type"] == "http.response.body":
-            chunks.append(message.get("body", b""))
-
-    await app(scope, receive, send)
-    return response_status, _response_headers(response_headers), b"".join(chunks)
-
-
-async def _run_asgi_stream(app: Any, scope: dict[str, Any], body: bytes, ctx: Any) -> Any:
-    """Run an ASGI app into a TransformStream for event-stream responses."""
-
-    from js import Response, TransformStream
-
-    stream = TransformStream.new()
-    writer = stream.writable.getWriter()
-    response_status = 200
-    response_headers: list[tuple[bytes, bytes]] = [
-        (b"content-type", b"text/event-stream; charset=utf-8")
-    ]
-    received = False
-    started = asyncio.Event()
-
-    async def receive() -> dict[str, Any]:
-        nonlocal received
-        if not received:
-            received = True
-            return {"type": "http.request", "body": body, "more_body": False}
-        return {"type": "http.disconnect"}
-
-    async def send(message: dict[str, Any]) -> None:
-        nonlocal response_status, response_headers
-        if message["type"] == "http.response.start":
-            response_status = int(message["status"])
-            response_headers = list(message.get("headers", []))
-            started.set()
-        elif message["type"] == "http.response.body":
-            chunk = message.get("body", b"")
-            if chunk:
-                await writer.write(chunk)
-            if not message.get("more_body", False):
-                await writer.close()
-
-    task = asyncio.create_task(app(scope, receive, send))
-    if ctx is not None and hasattr(ctx, "waitUntil"):
-        ctx.waitUntil(task)
-    await started.wait()
-    headers = _append_cors(_response_headers(response_headers))
-    return Response.new(stream.readable, {"status": response_status, "headers": headers})
+        return Response.new(body, {"status": status, "headers": headers})
 
 
 async def fetch(app: Any, request: Any, env: Any = None, ctx: Any = None) -> Any:
-    """Handle a Cloudflare Request by invoking an ASGI app."""
-
-    from js import Response
+    """Invoke an ASGI app for a Cloudflare Request."""
 
     parsed = urlsplit(str(request.url))
     body = await _read_request_body(request)
-    headers = _headers_to_scope(getattr(request, "headers", None))
     method = str(getattr(request, "method", "GET")).upper()
+    response_status = 500
+    response_headers: list[tuple[bytes, bytes]] = []
+    response_chunks: list[bytes] = []
+    received = False
 
     scope = {
         "type": "http",
@@ -158,20 +103,30 @@ async def fetch(app: Any, request: Any, env: Any = None, ctx: Any = None) -> Any
         "path": parsed.path,
         "raw_path": parsed.path.encode("utf-8"),
         "query_string": parsed.query.encode("utf-8"),
-        "headers": headers,
+        "headers": _headers_to_scope(getattr(request, "headers", None)),
         "server": (parsed.hostname or "worker", parsed.port or 443),
         "client": ("0.0.0.0", 0),
         "root_path": "",
     }
 
-    accept_header = ""
-    request_headers = getattr(request, "headers", None)
-    if request_headers is not None and hasattr(request_headers, "get"):
-        accept_header = str(request_headers.get("accept") or "")
+    async def receive() -> dict[str, Any]:
+        nonlocal received
+        if not received:
+            received = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return {"type": "http.disconnect"}
 
-    if "text/event-stream" in accept_header.lower():
-        return await _run_asgi_stream(app, scope, body, ctx)
+    async def send(message: dict[str, Any]) -> None:
+        nonlocal response_status, response_headers
+        if message["type"] == "http.response.start":
+            response_status = int(message["status"])
+            response_headers = list(message.get("headers", []))
+        elif message["type"] == "http.response.body":
+            response_chunks.append(message.get("body", b""))
 
-    status, response_headers, response_body = await _run_asgi_collect(app, scope, body)
-    response_headers = _append_cors(response_headers)
-    return Response.new(response_body, {"status": status, "headers": response_headers})
+    await app(scope, receive, send)
+    return _response(
+        b"".join(response_chunks),
+        status=response_status,
+        headers=_response_headers(response_headers),
+    )

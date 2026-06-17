@@ -85,7 +85,8 @@ class CausalAnalysisEngine:
         numeric_columns = [
             column
             for column in selected
-            if column in df.columns and pd.api.types.is_numeric_dtype(pd.to_numeric(df[column], errors="coerce"))
+            if column in df.columns
+            and pd.api.types.is_numeric_dtype(pd.to_numeric(df[column], errors="coerce"))
         ]
         numeric_summaries: dict[str, Any] = {}
         binary_counts: dict[str, Any] = {}
@@ -129,8 +130,18 @@ class CausalAnalysisEngine:
                 "outcome": "outcome_sleep_quality",
                 "time_zero_definition": "Evening of each eligible day before the sleep episode.",
                 "follow_up_window": "Same-night sleep quality aligned to the exposure day.",
-                "adjustment_variables": ["stress_score", "caffeine_mg", "prior_sleep_quality", "steps"],
-                "possible_confounders": ["stress_score", "caffeine_mg", "prior_sleep_quality", "steps"],
+                "adjustment_variables": [
+                    "stress_score",
+                    "caffeine_mg",
+                    "prior_sleep_quality",
+                    "steps",
+                ],
+                "possible_confounders": [
+                    "stress_score",
+                    "caffeine_mg",
+                    "prior_sleep_quality",
+                    "steps",
+                ],
                 "variables_to_avoid_adjusting_for": ["sleep_duration_hours", "sleep_efficiency"],
                 "why_meaningful": "Screen time is modifiable and often captured passively by phone sensors.",
             },
@@ -143,8 +154,18 @@ class CausalAnalysisEngine:
                 "outcome": "outcome_next_day_fatigue",
                 "time_zero_definition": "End of each calendar day after observing total steps.",
                 "follow_up_window": "Next morning fatigue.",
-                "adjustment_variables": ["prior_fatigue", "stress_score", "sleep_quality", "day_of_week"],
-                "possible_confounders": ["prior_fatigue", "stress_score", "sleep_quality", "day_of_week"],
+                "adjustment_variables": [
+                    "prior_fatigue",
+                    "stress_score",
+                    "sleep_quality",
+                    "day_of_week",
+                ],
+                "possible_confounders": [
+                    "prior_fatigue",
+                    "stress_score",
+                    "sleep_quality",
+                    "day_of_week",
+                ],
                 "variables_to_avoid_adjusting_for": ["active_minutes"],
                 "why_meaningful": "Activity is a common behavioral target, but better days can also cause more steps.",
             },
@@ -165,8 +186,16 @@ class CausalAnalysisEngine:
                 "outcome": "morning_fatigue",
                 "time_zero_definition": "Late evening/night eating window.",
                 "follow_up_window": "Morning fatigue the next morning.",
-                "adjustment_variables": ["stress_score", "late_night_screen_minutes", "prior_fatigue"],
-                "possible_confounders": ["stress_score", "late_night_screen_minutes", "prior_fatigue"],
+                "adjustment_variables": [
+                    "stress_score",
+                    "late_night_screen_minutes",
+                    "prior_fatigue",
+                ],
+                "possible_confounders": [
+                    "stress_score",
+                    "late_night_screen_minutes",
+                    "prior_fatigue",
+                ],
                 "variables_to_avoid_adjusting_for": ["sleep_duration_hours"],
                 "why_meaningful": "Nighttime eating can be proxied by kitchen sensors and may be behaviorally modifiable.",
             },
@@ -190,7 +219,10 @@ class CausalAnalysisEngine:
                     "day_of_week",
                     "baseline_phone_use",
                 ],
-                "variables_to_avoid_adjusting_for": ["late_night_screen_minutes", "nighttime_eating"],
+                "variables_to_avoid_adjusting_for": [
+                    "late_night_screen_minutes",
+                    "nighttime_eating",
+                ],
                 "why_meaningful": "It directly evaluates a digital intervention strategy.",
             },
         ]
@@ -239,7 +271,9 @@ class CausalAnalysisEngine:
                 "method must be one of: regression_adjustment, ipw, g_formula, doubly_robust."
             )
         if model_type != "linear":
-            raise ValueError("Only linear outcome models are currently implemented for causal estimates.")
+            raise ValueError(
+                "Only linear outcome models are currently implemented for causal estimates."
+            )
 
         analysis_df = self._prepare_lagged_data(
             records=records,
@@ -381,7 +415,8 @@ class CausalAnalysisEngine:
             "interpretation": (
                 f"Among eligible person-days, {result['plain_language_interpretation']}"
             ),
-            "immortal_time_bias_warning": warnings or [
+            "immortal_time_bias_warning": warnings
+            or [
                 "Time zero appears explicit; residual immortal time bias depends on whether data were aligned correctly."
             ],
             "limitations": [
@@ -406,8 +441,12 @@ class CausalAnalysisEngine:
         """Simulate an intervention using an adjusted outcome model."""
 
         df = records_to_dataframe(records)
-        adjustment_variables = adjustment_variables or self._default_adjustments(df, target_variable, outcome)
-        validate_columns(df, [target_variable, outcome, *adjustment_variables], context="simulate_intervention")
+        adjustment_variables = adjustment_variables or self._default_adjustments(
+            df, target_variable, outcome
+        )
+        validate_columns(
+            df, [target_variable, outcome, *adjustment_variables], context="simulate_intervention"
+        )
         model_columns = [target_variable, outcome, *adjustment_variables]
         model_df = clean_numeric_frame(df, model_columns)
         if model_df.shape[0] < max(20, len(adjustment_variables) + 5):
@@ -424,7 +463,9 @@ class CausalAnalysisEngine:
             intervention_rule=intervention_rule,
             expected_change=expected_change,
         )
-        x_intervention = self._design_matrix(intervention_df, [target_variable, *adjustment_variables])
+        x_intervention = self._design_matrix(
+            intervention_df, [target_variable, *adjustment_variables]
+        )
         intervention_predictions = model.predict(x_intervention)
         difference = float(intervention_predictions.mean() - baseline_predictions.mean())
 
@@ -466,7 +507,11 @@ class CausalAnalysisEngine:
             extension = "json"
         else:
             raise ValueError("format must be 'csv' or 'json'.")
-        patient = str(df["patient_id"].iloc[0]) if "patient_id" in df.columns and not df.empty else "patient"
+        patient = (
+            str(df["patient_id"].iloc[0])
+            if "patient_id" in df.columns and not df.empty
+            else "patient"
+        )
         return {
             "serialized_dataset": serialized,
             "filename_suggestion": f"{patient}_synthetic_patient_data.{extension}",
@@ -491,7 +536,9 @@ class CausalAnalysisEngine:
         if lag_exposure_days < 0 or lag_outcome_days < 0:
             raise ValueError("lag_exposure_days and lag_outcome_days must be non-negative.")
         df = records_to_dataframe(records)
-        validate_columns(df, [exposure, outcome, *adjustment_variables], context="estimate_causal_effect")
+        validate_columns(
+            df, [exposure, outcome, *adjustment_variables], context="estimate_causal_effect"
+        )
         analysis_df = df.copy()
         analysis_df["_analysis_exposure"] = analysis_df[exposure].shift(lag_exposure_days)
         analysis_df["_analysis_outcome"] = analysis_df[outcome].shift(-lag_outcome_days)
@@ -561,7 +608,9 @@ class CausalAnalysisEngine:
             if value_a is None or value_b is None:
                 raise ValueError("set_value treatment_rule requires 'value_a' and 'value_b'.")
             transformed = df.copy()
-            transformed["_continuous_exposure"] = pd.to_numeric(df["_analysis_exposure"], errors="coerce")
+            transformed["_continuous_exposure"] = pd.to_numeric(
+                df["_analysis_exposure"], errors="coerce"
+            )
             transformed["_treatment"] = transformed["_continuous_exposure"]
             return TreatmentDefinition(
                 "_treatment",
@@ -573,7 +622,9 @@ class CausalAnalysisEngine:
             )
 
         if contrast:
-            raise ValueError("contrast is reserved for future extensions; provide a treatment_rule.")
+            raise ValueError(
+                "contrast is reserved for future extensions; provide a treatment_rule."
+            )
         raise ValueError(
             "Unsupported treatment_rule type. Use 'binary_threshold', 'binary_variable', or 'set_value'."
         )
@@ -901,7 +952,9 @@ class CausalAnalysisEngine:
                 warnings.append("The exposure has no usable variation.")
         return warnings
 
-    def _correlation_highlights(self, df: pd.DataFrame, numeric_columns: list[str]) -> list[dict[str, Any]]:
+    def _correlation_highlights(
+        self, df: pd.DataFrame, numeric_columns: list[str]
+    ) -> list[dict[str, Any]]:
         """Return strongest absolute correlations."""
 
         usable_columns = [
@@ -928,7 +981,9 @@ class CausalAnalysisEngine:
         highlights.sort(key=lambda item: abs(item["correlation"]), reverse=True)
         return highlights[:8]
 
-    def _time_trend_highlights(self, df: pd.DataFrame, numeric_columns: list[str]) -> list[dict[str, Any]]:
+    def _time_trend_highlights(
+        self, df: pd.DataFrame, numeric_columns: list[str]
+    ) -> list[dict[str, Any]]:
         """Return variables with notable linear time trends."""
 
         if "day_index" not in df.columns:
@@ -944,7 +999,9 @@ class CausalAnalysisEngine:
                 continue
             correlation = valid.iloc[:, 0].corr(valid.iloc[:, 1])
             if pd.notna(correlation) and abs(correlation) >= 0.25:
-                trends.append({"variable": column, "correlation_with_day_index": float(correlation)})
+                trends.append(
+                    {"variable": column, "correlation_with_day_index": float(correlation)}
+                )
         trends.sort(key=lambda item: abs(item["correlation_with_day_index"]), reverse=True)
         return trends[:8]
 
@@ -1003,19 +1060,29 @@ class CausalAnalysisEngine:
         variable = strategy_a.get("variable") or strategy_b.get("variable")
         if not variable:
             raise ValueError("Each treatment strategy must identify a variable.")
-        if strategy_a.get("type") == "binary_variable" or strategy_b.get("type") == "binary_variable":
+        if (
+            strategy_a.get("type") == "binary_variable"
+            or strategy_b.get("type") == "binary_variable"
+        ):
             return {"type": "binary_variable", "variable": variable}
         if "value" in strategy_a and "value" in strategy_b:
             value_a = strategy_a["value"]
             value_b = strategy_b["value"]
             if {value_a, value_b}.issubset({0, 1, 0.0, 1.0}):
                 return {"type": "binary_variable", "variable": variable}
-            return {"type": "set_value", "variable": variable, "value_a": value_a, "value_b": value_b}
+            return {
+                "type": "set_value",
+                "variable": variable,
+                "value_a": value_a,
+                "value_b": value_b,
+            }
         raise ValueError(
             "Treatment strategies must use binary_variable or provide comparable 'value' entries."
         )
 
-    def _default_adjustments(self, df: pd.DataFrame, target_variable: str, outcome: str) -> list[str]:
+    def _default_adjustments(
+        self, df: pd.DataFrame, target_variable: str, outcome: str
+    ) -> list[str]:
         """Choose conservative default adjustments from common variables."""
 
         candidates = [
@@ -1027,7 +1094,11 @@ class CausalAnalysisEngine:
             "day_of_week",
             "prior_bp",
         ]
-        return [column for column in candidates if column in df.columns and column not in {target_variable, outcome}]
+        return [
+            column
+            for column in candidates
+            if column in df.columns and column not in {target_variable, outcome}
+        ]
 
     def _apply_expected_change(
         self,

@@ -92,7 +92,11 @@ def generate_causal_dag(
     if variables:
         variable_set = set(variables)
         variable_set.update({scenario_def.exposure, scenario_def.outcome})
-        edges = [(source, target) for source, target in edges if source in variable_set and target in variable_set]
+        edges = [
+            (source, target)
+            for source, target in edges
+            if source in variable_set and target in variable_set
+        ]
 
     return {
         "scenario": scenario_def.name,
@@ -142,7 +146,9 @@ def check_adjustment_set(
 
     exposure_descendants = descendants_of(edges, exposure)
     outcome_ancestors_after_exposure = ancestors_of(edges, outcome)
-    possible_mediators = sorted((exposure_descendants & outcome_ancestors_after_exposure) - {outcome})
+    possible_mediators = sorted(
+        (exposure_descendants & outcome_ancestors_after_exposure) - {outcome}
+    )
     mediators_adjusted = sorted(set(possible_mediators) & adjusted)
 
     direct_colliders = identify_colliders(edges)

@@ -2,15 +2,22 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
 from patient_causal_mcp.server import TOOL_NAMES
 
 
-def test_worker_module_imports_without_cloudflare_runtime() -> None:
+pytest.importorskip("workers", reason="workers-py is required for Cloudflare Worker imports")
+
+
+def test_worker_module_imports_with_workers_runtime_sdk() -> None:
     worker = importlib.import_module("worker")
 
+    assert hasattr(worker, "Default")
     assert hasattr(worker, "setup_server")
     assert hasattr(worker, "PatientCausalMCPServer")
-    assert worker._health_payload()["mcp_endpoint"] == "/mcp"  # noqa: SLF001
+    assert hasattr(worker, "health_payload")
+    assert worker.health_payload()["mcp_endpoint"] == "/mcp"
 
 
 def test_worker_setup_server_returns_fastmcp_and_asgi_app() -> None:
@@ -27,14 +34,14 @@ def test_worker_setup_server_returns_fastmcp_and_asgi_app() -> None:
 def test_worker_health_payload_documents_remote_mcp_surface() -> None:
     worker = importlib.import_module("worker")
 
-    payload = worker._health_payload()  # noqa: SLF001
+    payload = worker.health_payload()
 
     assert payload["ok"] is True
     assert payload["name"] == "patient-causal-mcp"
     assert payload["transport"] == "streamable-http"
     assert payload["mcp_endpoint"] == "/mcp"
     assert payload["tools"] == TOOL_NAMES
-    assert payload["auth"] == "authless-demo"
+    assert payload["auth"] == "none"
 
 
 def test_worker_cors_exposes_mcp_session_id_for_inspector() -> None:

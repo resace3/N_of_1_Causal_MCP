@@ -135,10 +135,7 @@ class PatientSimulator:
             )
 
             pain_score = clip(
-                0.60 * prev_pain
-                + 0.16 * stress_score
-                + 0.03 * prev_fatigue
-                + rng.normal(0, 0.7),
+                0.60 * prev_pain + 0.16 * stress_score + 0.03 * prev_fatigue + rng.normal(0, 0.7),
                 0,
                 10,
             )
@@ -182,11 +179,7 @@ class PatientSimulator:
             active_minutes = int(clip(steps / 105 + rng.normal(0, 12), 5, 240))
             sedentary_minutes = int(
                 clip(
-                    760
-                    - 0.018 * steps
-                    + 11 * stress_score
-                    + 9 * prev_fatigue
-                    + rng.normal(0, 45),
+                    760 - 0.018 * steps + 11 * stress_score + 9 * prev_fatigue + rng.normal(0, 45),
                     240,
                     1100,
                 )
@@ -602,7 +595,9 @@ class PatientSimulator:
     ) -> float:
         """Simulate sleep duration with scenario-specific effects."""
 
-        screen_penalty = 0.010 if scenario_name in {"sleep_screen_time", "mixed_lifestyle"} else 0.006
+        screen_penalty = (
+            0.010 if scenario_name in {"sleep_screen_time", "mixed_lifestyle"} else 0.006
+        )
         stress_penalty = 0.11 if scenario_name == "stress_sleep" else 0.075
         sleep = (
             traits.baseline_sleep_need

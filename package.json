@@ -1,12 +1,14 @@
 {
-  "name": "patient-causal-mcp",
+  "name": "patient-causal-mcp-cloudflare",
   "private": true,
-  "description": "Cloudflare Builds entrypoint for the Python patient causal MCP server.",
+  "version": "0.1.0",
+  "description": "Cloudflare Python Worker wrapper for the patient causal MCP server.",
   "scripts": {
-    "deploy": "bash scripts/cf-deploy.sh",
     "dev": "uv run pywrangler dev",
-    "test": "python -m pytest",
-    "test:cf-imports": "python -m pytest tests/test_cloudflare_worker_imports.py"
+    "deploy": "bash scripts/cf-deploy.sh",
+    "test": "uv run pytest",
+    "lint": "uv run ruff check .",
+    "format": "uv run ruff format ."
   },
   "devDependencies": {
     "wrangler": "latest"

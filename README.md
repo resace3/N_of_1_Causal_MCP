@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](pyproject.toml)
 [![Repository](https://img.shields.io/badge/GitHub-resace3%2FN__of__1__Causal__MCP-black.svg)](https://github.com/resace3/N_of_1_Causal_MCP)
 
-`patient-causal-mcp` is a local Model Context Protocol server for N-of-1 digital health causal analysis. It ships with a static raw 30-day sensor/event dataset, a static 100-day analysis-ready patient dataset, and MCP tools that let an AI assistant summarize the data, inspect causal assumptions, run causal analyses, emulate target trials, simulate interventions, and export results.
+`patient-causal-mcp` is both a local stdio Model Context Protocol server and a Cloudflare remote MCP server for N-of-1 digital health causal analysis. It ships with a static raw 30-day sensor/event dataset, a static 100-day analysis-ready patient dataset, and MCP tools that let an AI assistant summarize the data, inspect causal assumptions, run causal analyses, emulate target trials, simulate interventions, and export results.
 
 This repository does **not** expose a `simulate_patient_data` MCP tool. The patient dataset is already present in the repo at:
 
@@ -102,6 +102,13 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+Or with `uv`:
+
+```bash
+python -m pip install uv
+uv sync
+```
+
 ## Run The MCP Server
 
 ```bash
@@ -140,7 +147,7 @@ The same Python MCP tool surface can also run as an authless Cloudflare Python W
 https://remote-mcp-server-authless.resace3.workers.dev/mcp
 ```
 
-The local stdio entrypoint remains unchanged. Cloudflare deployment is additive and uses `src/worker.py` plus the same `patient_causal_mcp.server.create_mcp_server` tool registration path.
+The local stdio entrypoint remains unchanged. Cloudflare deployment is additive and uses `src/worker.py` plus the same `patient_causal_mcp.server.create_mcp_server` tool registration path. The Worker exposes health JSON at `/` and `/health`, then routes MCP traffic to `/mcp`.
 
 Quick local Worker test:
 
@@ -159,6 +166,8 @@ URL: http://localhost:8787/mcp
 Full deployment instructions are in [CLOUDFLARE.md](CLOUDFLARE.md).
 
 Security note: the configured Worker is authless for demonstration. Do not connect private Home Assistant, wearable, phone, financial, or clinical datasets until authentication is added.
+
+Implementation note: the Python Worker uses FastMCP with `json_response=True` and a small ASGI bridge that collects finite JSON responses. Long-lived event-stream resumability is not implemented in this Python bridge.
 
 ## Tool Inventory
 
@@ -369,6 +378,7 @@ patient-causal-mcp/
     example_prompts.md
   scripts/
     cf-deploy.sh
+    test_remote_mcp_http.py
   src/
     asgi.py
     uvicorn.py
@@ -394,15 +404,17 @@ patient-causal-mcp/
     test_cloudflare_worker_imports.py
     test_dag.py
     test_dataset_contract.py
+    test_mcp_stdio_smoke.py
     test_mcp_server_factory.py
     test_mcp_tool_contract.py
     test_raw_event_dataset.py
+    test_static_file_formatting.py
 ```
 
 Core modules:
 
 - `server.py`: MCP tool registration and in-memory dataset registry.
-- `worker.py`: Cloudflare Python Worker entrypoint for `/`, `/health`, and `/mcp`.
+- `worker.py`: Cloudflare Python Worker `Default(WorkerEntrypoint)` entrypoint for `/`, `/health`, and `/mcp`.
 - `asgi.py`: minimal Cloudflare Request/Response to ASGI bridge for Streamable HTTP.
 - `uvicorn.py`: Worker compatibility shim for optional SDK imports.
 - `datasets.py`: package-data loader and bundled dataset metadata.
@@ -419,7 +431,7 @@ Core modules:
 Run tests:
 
 ```bash
-pytest
+uv run pytest
 ```
 
 The pytest suite includes more than 700 collected checks covering the bundled daily dataset contract, raw event dataset contract, required `entity_id` coverage, variable dictionary, realistic ranges, MCP tool registration, stdio MCP calls, causal estimators, DAG helpers, and examples.
@@ -448,6 +460,12 @@ PY
 ```
 
 Expected tools include `get_available_datasets`; they do not include `simulate_patient_data`.
+
+Run a local Streamable HTTP smoke test after starting `pywrangler dev`:
+
+```bash
+uv run python scripts/test_remote_mcp_http.py http://localhost:8787/mcp
+```
 
 ## Home Assistant Integration Notes
 

@@ -7,28 +7,34 @@ name = "patient-causal-mcp"
 version = "0.1.0"
 description = "MCP server for bundled N-of-1 patient data and causal analysis."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
 authors = [
   { name = "Patient Causal MCP Contributors" }
 ]
 dependencies = [
-  "mcp>=1.0.0",
+  "mcp>=1.12.4,<1.13",
   "numpy>=1.24",
   "pandas>=2.0",
-  "pydantic>=2.0",
-  "starlette>=0.27"
+  "pydantic>=2.0,<2.11",
+  "starlette>=0.37"
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
+  "pytest-asyncio>=0.23",
   "ruff>=0.6"
+]
+worker = [
+  "workers-py",
+  "workers-runtime-sdk"
 ]
 
 [dependency-groups]
 dev = [
   "pytest>=8.0",
+  "pytest-asyncio>=0.23",
   "ruff>=0.6",
   "workers-py",
   "workers-runtime-sdk"
@@ -46,3 +52,7 @@ patient_causal_mcp = ["data/*.csv", "data/*.json"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

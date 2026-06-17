@@ -1,7 +1,5 @@
 """MCP server exposing bundled patient data and causal analysis tools."""
 
-from __future__ import annotations
-
 from typing import Any
 
 from patient_causal_mcp.causal_engine import CausalAnalysisEngine
@@ -55,7 +53,9 @@ def _ensure_bundled_datasets_loaded() -> None:
             DATASET_REGISTRY[dataset_id] = load_bundled_dataset(dataset_id)
 
 
-def _records_from_input(dataset_id: str | None, data_records: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def _records_from_input(
+    dataset_id: str | None, data_records: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
     """Return records from explicit data or the in-memory registry."""
 
     if data_records is not None:
@@ -69,7 +69,7 @@ def _records_from_input(dataset_id: str | None, data_records: list[dict[str, Any
     return DATASET_REGISTRY[dataset_id]
 
 
-def get_available_datasets() -> dict[str, Any]:
+def get_available_datasets() -> dict:
     """Return bundled static datasets available for analysis."""
 
     _ensure_bundled_datasets_loaded()
@@ -80,17 +80,17 @@ def get_available_datasets() -> dict[str, Any]:
     }
 
 
-def get_available_scenarios() -> dict[str, Any]:
+def get_available_scenarios() -> dict:
     """Return descriptions of supported causal-analysis scenarios."""
 
     return {"scenarios": list_scenarios()}
 
 
 def describe_patient_data(
-    dataset_id: str | None = None,
-    data_records: list[dict[str, Any]] | None = None,
-    variables: list[str] | None = None,
-) -> dict[str, Any]:
+    dataset_id: str = None,
+    data_records: list = None,
+    variables: list = None,
+) -> dict:
     """Summarize a patient dataset."""
 
     request = DescribePatientDataInput(
@@ -103,10 +103,10 @@ def describe_patient_data(
 
 
 def propose_causal_question(
-    dataset_id: str | None = None,
-    data_records: list[dict[str, Any]] | None = None,
-    user_goal: str | None = None,
-) -> dict[str, Any]:
+    dataset_id: str = None,
+    data_records: list = None,
+    user_goal: str = None,
+) -> dict:
     """Propose causal questions for a patient dataset."""
 
     request = ProposeCausalQuestionInput(
@@ -119,20 +119,20 @@ def propose_causal_question(
 
 
 def estimate_causal_effect(
-    dataset_id: str | None = None,
-    data_records: list[dict[str, Any]] | None = None,
+    dataset_id: str = None,
+    data_records: list = None,
     exposure: str = "",
     outcome: str = "",
-    treatment_rule: dict[str, Any] | None = None,
-    adjustment_variables: list[str] | None = None,
+    treatment_rule: dict = None,
+    adjustment_variables: list = None,
     method: str = "regression_adjustment",
     lag_exposure_days: int = 0,
     lag_outcome_days: int = 0,
     bootstrap: bool = False,
     n_bootstrap: int = 200,
     model_type: str = "linear",
-    contrast: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+    contrast: dict = None,
+) -> dict:
     """Estimate a causal effect with regression adjustment, IPW, g-formula, or AIPW."""
 
     request = EstimateCausalEffectInput(
@@ -168,16 +168,16 @@ def estimate_causal_effect(
 
 
 def run_target_trial_emulation(
-    dataset_id: str | None = None,
-    data_records: list[dict[str, Any]] | None = None,
-    eligibility_criteria: dict[str, Any] | None = None,
-    treatment_strategies: list[dict[str, Any]] | None = None,
-    assignment_time: str | dict[str, Any] = "8 PM reminder decision",
+    dataset_id: str = None,
+    data_records: list = None,
+    eligibility_criteria: dict = None,
+    treatment_strategies: list = None,
+    assignment_time: object = "8 PM reminder decision",
     follow_up_days: int = 1,
     outcome: str = "",
-    adjustment_variables: list[str] | None = None,
+    adjustment_variables: list = None,
     method: str = "g_formula",
-) -> dict[str, Any]:
+) -> dict:
     """Emulate a simple repeated daily target trial."""
 
     request = TargetTrialInput(
@@ -206,8 +206,8 @@ def run_target_trial_emulation(
 
 def generate_causal_dag(
     scenario: str = "mixed_lifestyle",
-    variables: list[str] | None = None,
-) -> dict[str, Any]:
+    variables: list = None,
+) -> dict:
     """Return scenario DAG nodes, edges, adjustment guidance, DOT, and Mermaid text."""
 
     request = GenerateDagInput(scenario=scenario, variables=variables)
@@ -215,11 +215,11 @@ def generate_causal_dag(
 
 
 def check_adjustment_set(
-    dag_edges: list[dict[str, str]],
+    dag_edges: list,
     exposure: str,
     outcome: str,
-    adjustment_variables: list[str] | None = None,
-) -> dict[str, Any]:
+    adjustment_variables: list = None,
+) -> dict:
     """Check whether an adjustment set is reasonable for a simplified DAG."""
 
     request = CheckAdjustmentSetInput(
@@ -237,16 +237,16 @@ def check_adjustment_set(
 
 
 def simulate_intervention(
-    dataset_id: str | None = None,
-    data_records: list[dict[str, Any]] | None = None,
+    dataset_id: str = None,
+    data_records: list = None,
     intervention_name: str = "",
-    intervention_rule: dict[str, Any] | None = None,
+    intervention_rule: dict = None,
     target_variable: str = "",
     expected_change: float = 0.0,
     outcome: str = "",
     method: str = "g_formula",
-    adjustment_variables: list[str] | None = None,
-) -> dict[str, Any]:
+    adjustment_variables: list = None,
+) -> dict:
     """Simulate a behavioral intervention using the fitted data relationships."""
 
     request = SimulateInterventionInput(
@@ -274,10 +274,10 @@ def simulate_intervention(
 
 
 def export_dataset(
-    dataset_id: str | None = None,
-    data_records: list[dict[str, Any]] | None = None,
+    dataset_id: str = None,
+    data_records: list = None,
     format: str = "csv",
-) -> dict[str, Any]:
+) -> dict:
     """Export a dataset as CSV text or JSON records."""
 
     request = ExportDatasetInput(
@@ -289,7 +289,13 @@ def export_dataset(
     return ENGINE.export_dataset(records, format=request.format)
 
 
-def _new_fastmcp_server(*, stateless_http: bool, json_response: bool) -> Any:
+def _new_fastmcp_server(
+    *,
+    name: str = "patient-causal-mcp",
+    stateless_http: bool = False,
+    json_response: bool = False,
+    streamable_http_path: str | None = None,
+) -> Any:
     """Construct FastMCP while tolerating older SDK keyword support."""
 
     if FastMCP is None:
@@ -303,20 +309,28 @@ def _new_fastmcp_server(*, stateless_http: bool, json_response: bool) -> Any:
         kwargs["stateless_http"] = True
     if json_response:
         kwargs["json_response"] = True
+    if streamable_http_path is not None:
+        kwargs["streamable_http_path"] = streamable_http_path
 
     try:
-        return FastMCP("patient-causal-mcp", **kwargs)
+        return FastMCP(name, **kwargs)
     except TypeError:
-        # Older Python MCP SDK versions may not support one or both HTTP kwargs.
-        # Retry progressively while keeping tool registration unchanged.
-        for fallback_kwargs in (
-            {"stateless_http": kwargs.get("stateless_http", False)},
-            {"json_response": kwargs.get("json_response", False)},
-            {},
-        ):
-            fallback_kwargs = {key: value for key, value in fallback_kwargs.items() if value}
+        # Older Python MCP SDK versions may not support every HTTP keyword.
+        # Retry with progressively smaller constructor kwargs while leaving tool
+        # registration unchanged and without swallowing causal-tool runtime errors.
+        fallback_keys = [
+            ("stateless_http", "json_response"),
+            ("stateless_http", "streamable_http_path"),
+            ("json_response", "streamable_http_path"),
+            ("stateless_http",),
+            ("json_response",),
+            ("streamable_http_path",),
+            (),
+        ]
+        for keys in fallback_keys:
+            fallback_kwargs = {key: kwargs[key] for key in keys if key in kwargs}
             try:
-                return FastMCP("patient-causal-mcp", **fallback_kwargs)
+                return FastMCP(name, **fallback_kwargs)
             except TypeError:
                 continue
         raise
@@ -343,17 +357,26 @@ def create_mcp_server(
     *,
     stateless_http: bool = False,
     json_response: bool = False,
+    streamable_http_path: str | None = None,
 ) -> Any:
     """Create the MCP server instance and register all tools."""
 
-    mcp = _new_fastmcp_server(stateless_http=stateless_http, json_response=json_response)
+    mcp = _new_fastmcp_server(
+        stateless_http=stateless_http,
+        json_response=json_response,
+        streamable_http_path=streamable_http_path,
+    )
     return _register_tools(mcp)
 
 
 def create_cloudflare_mcp_server() -> Any:
     """Create an MCP server configured for Cloudflare Streamable HTTP."""
 
-    return create_mcp_server(stateless_http=True, json_response=True)
+    return create_mcp_server(
+        stateless_http=False,
+        json_response=True,
+        streamable_http_path="/mcp",
+    )
 
 
 def main() -> None:

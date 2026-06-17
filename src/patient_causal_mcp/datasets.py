@@ -44,7 +44,9 @@ def load_bundled_dataset(dataset_id: str = DEFAULT_DATASET_ID) -> list[dict[str,
 
     if dataset_id not in BUNDLED_DATASETS:
         valid = ", ".join(sorted(BUNDLED_DATASETS))
-        raise ValueError(f"Unknown bundled dataset_id '{dataset_id}'. Available bundled datasets: {valid}.")
+        raise ValueError(
+            f"Unknown bundled dataset_id '{dataset_id}'. Available bundled datasets: {valid}."
+        )
     dataset = BUNDLED_DATASETS[dataset_id]
     data_path = resources.files("patient_causal_mcp").joinpath("data", dataset.filename)
     with resources.as_file(data_path) as path:
