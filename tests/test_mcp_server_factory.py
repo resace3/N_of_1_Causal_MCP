@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from patient_causal_mcp.server import (
+    PUBLIC_SYNTHETIC_ONLY_ERROR,
     TOOL_NAMES,
     create_cloudflare_mcp_server,
     create_mcp_server,
@@ -24,11 +27,17 @@ EXPECTED_TOOL_NAMES = [
     "check_adjustment_set",
     "simulate_intervention",
     "export_dataset",
+    "query_ha_states",
+    "aggregate_ha_states_daily",
 ]
 
 
 def _registered_tool_names(server: Any) -> set[str]:
     return set(server._tool_manager._tools)  # noqa: SLF001 - FastMCP stores tools here.
+
+
+def _registered_tool(server: Any, name: str) -> Any:
+    return server._tool_manager._tools[name]  # noqa: SLF001 - FastMCP stores tools here.
 
 
 def test_tool_names_are_exact_expected_list() -> None:
@@ -50,6 +59,37 @@ def test_cloudflare_mcp_server_factory_constructs_expected_tools() -> None:
     assert _registered_tool_names(server) == set(EXPECTED_TOOL_NAMES)
     assert hasattr(server, "streamable_http_app")
     assert callable(server.streamable_http_app)
+
+
+def test_cloudflare_mcp_server_rejects_caller_supplied_records() -> None:
+    server = create_cloudflare_mcp_server()
+    tool = _registered_tool(server, "describe_patient_data")
+
+    assert "data_records" not in tool.parameters["properties"]
+
+    with pytest.raises(ValueError, match="Caller-supplied data_records") as exc_info:
+        tool.fn(data_records=[{"date": "2026-01-01", "steps": 1}])
+
+    assert str(exc_info.value) == PUBLIC_SYNTHETIC_ONLY_ERROR
+
+
+def test_cloudflare_mcp_server_allows_bundled_synthetic_dataset_ids() -> None:
+    server = create_cloudflare_mcp_server()
+    tool = _registered_tool(server, "describe_patient_data")
+
+    summary = tool.fn(dataset_id="patient_001_100_days", variables=["steps"])
+
+    assert summary["number_of_days"] == 100
+    assert "steps" in summary["numeric_summaries"]
+
+
+def test_local_mcp_server_still_accepts_caller_supplied_records() -> None:
+    server = create_mcp_server()
+    tool = _registered_tool(server, "describe_patient_data")
+
+    summary = tool.fn(data_records=[{"date": "2026-01-01", "steps": 1}])
+
+    assert summary["number_of_days"] == 1
 
 
 def test_core_tool_functions_still_return_dictionaries() -> None:

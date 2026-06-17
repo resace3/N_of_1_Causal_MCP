@@ -47,6 +47,8 @@ def test_expected_tools_are_sorted_for_docs() -> None:
         "check_adjustment_set",
         "simulate_intervention",
         "export_dataset",
+        "query_ha_states",
+        "aggregate_ha_states_daily",
     ]
 
 

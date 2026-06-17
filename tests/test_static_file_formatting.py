@@ -20,7 +20,7 @@ def test_package_json_parses() -> None:
     parsed = json.loads((ROOT / "package.json").read_text())
 
     assert parsed["scripts"]["deploy"] == "bash scripts/cf-deploy.sh"
-    assert parsed["scripts"]["dev"] == "uv run pywrangler dev"
+    assert parsed["scripts"]["dev"] == "wrangler dev"
 
 
 def test_wrangler_jsonc_contains_cloudflare_worker_settings() -> None:
@@ -28,12 +28,12 @@ def test_wrangler_jsonc_contains_cloudflare_worker_settings() -> None:
 
     for expected in [
         '"name": "remote-mcp-server-authless"',
-        '"main": "src/worker.py"',
+        '"main": "src/worker.ts"',
         '"compatibility_date": "2026-06-17"',
-        '"python_workers"',
+        '"nodejs_compat"',
         '"name": "N_OF_1_MCP"',
-        '"class_name": "PatientCausalMCPServer"',
-        '"new_sqlite_classes": ["PatientCausalMCPServer"]',
+        '"class_name": "MyMCP"',
+        '"new_sqlite_classes": ["MyMCP"]',
     ]:
         assert expected in text
 

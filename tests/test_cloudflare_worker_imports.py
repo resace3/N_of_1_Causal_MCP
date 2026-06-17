@@ -1,52 +1,39 @@
 from __future__ import annotations
 
-import importlib
-
-import pytest
+from pathlib import Path
 
 from patient_causal_mcp.server import TOOL_NAMES
 
 
-pytest.importorskip("workers", reason="workers-py is required for Cloudflare Worker imports")
+ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_worker_module_imports_with_workers_runtime_sdk() -> None:
-    worker = importlib.import_module("worker")
+def test_typescript_worker_exports_existing_durable_object_class() -> None:
+    source = (ROOT / "src" / "worker.ts").read_text()
 
-    assert hasattr(worker, "Default")
-    assert hasattr(worker, "setup_server")
-    assert hasattr(worker, "PatientCausalMCPServer")
-    assert hasattr(worker, "health_payload")
-    assert worker.health_payload()["mcp_endpoint"] == "/mcp"
+    assert "export class MyMCP" in source
+    assert "export class PatientCausalMCPServer extends MyMCP" in source
+    assert "N_OF_1_MCP" in source
 
 
-def test_worker_setup_server_returns_fastmcp_and_asgi_app() -> None:
-    worker = importlib.import_module("worker")
+def test_typescript_worker_documents_public_synthetic_only_surface() -> None:
+    source = (ROOT / "src" / "worker.ts").read_text()
 
-    mcp, app = worker.setup_server()
-
-    assert mcp is not None
-    assert app is not None
-    assert hasattr(mcp, "streamable_http_app")
-    assert set(mcp._tool_manager._tools) == set(TOOL_NAMES)  # noqa: SLF001
+    assert 'data_policy: "bundled_synthetic_only"' in source
+    assert 'caller_supplied_data_records: "disabled"' in source
+    assert "Caller-supplied data_records are disabled" in source
+    assert "MAX_MCP_REQUEST_BODY_BYTES = 128 * 1024" in source
 
 
-def test_worker_health_payload_documents_remote_mcp_surface() -> None:
-    worker = importlib.import_module("worker")
+def test_typescript_worker_contains_expected_tool_names() -> None:
+    source = (ROOT / "src" / "worker.ts").read_text()
 
-    payload = worker.health_payload()
-
-    assert payload["ok"] is True
-    assert payload["name"] == "patient-causal-mcp"
-    assert payload["transport"] == "streamable-http"
-    assert payload["mcp_endpoint"] == "/mcp"
-    assert payload["tools"] == TOOL_NAMES
-    assert payload["auth"] == "none"
+    for tool_name in TOOL_NAMES:
+        assert f'"{tool_name}"' in source
 
 
-def test_worker_cors_exposes_mcp_session_id_for_inspector() -> None:
-    worker = importlib.import_module("worker")
+def test_typescript_worker_cors_is_not_wildcard() -> None:
+    source = (ROOT / "src" / "worker.ts").read_text()
 
-    assert worker.CORS_HEADERS["Access-Control-Allow-Origin"] == "*"
-    assert "Mcp-Session-Id" in worker.CORS_HEADERS["Access-Control-Allow-Headers"]
-    assert worker.CORS_HEADERS["Access-Control-Expose-Headers"] == "Mcp-Session-Id"
+    assert '"Access-Control-Allow-Origin": origin' in source
+    assert '"Access-Control-Allow-Origin": "*"' not in source

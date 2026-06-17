@@ -123,6 +123,132 @@ class CausalAnalysisEngine:
         candidates = [
             {
                 "question": (
+                    "Synthetic Homer demo: what is the effect of late-night screen time on "
+                    "next-day fatigue?"
+                ),
+                "exposure": "late_night_screen_minutes",
+                "outcome": "outcome_next_day_fatigue",
+                "time_zero_definition": "Late evening before the overnight sleep window.",
+                "follow_up_window": "Next-day fatigue outcome aligned to the exposure day.",
+                "adjustment_variables": [
+                    "prior_sleep_quality",
+                    "prior_fatigue",
+                    "prior_stress_score",
+                    "is_workday",
+                    "caffeine_mg",
+                ],
+                "possible_confounders": [
+                    "prior_sleep_quality",
+                    "prior_fatigue",
+                    "prior_stress_score",
+                    "is_workday",
+                    "caffeine_mg",
+                ],
+                "variables_to_avoid_adjusting_for": ["sleep_duration_hours", "sleep_quality"],
+                "why_meaningful": (
+                    "This uses only synthetic parody sensor data and demonstrates time-varying "
+                    "confounding in a smart-home setting."
+                ),
+            },
+            {
+                "question": (
+                    "Synthetic Homer demo: what is the effect of walk nudges on next-day mood?"
+                ),
+                "exposure": "walk_nudge_received",
+                "outcome": "outcome_mood_next_day",
+                "time_zero_definition": "Daily nudge-policy decision before the walking window.",
+                "follow_up_window": "Next-day mood outcome.",
+                "adjustment_variables": [
+                    "prior_fatigue",
+                    "prior_steps",
+                    "prior_stress_score",
+                    "is_workday",
+                    "baseline_activity_level",
+                ],
+                "possible_confounders": [
+                    "prior_fatigue",
+                    "prior_steps",
+                    "prior_stress_score",
+                    "is_workday",
+                    "baseline_activity_level",
+                ],
+                "variables_to_avoid_adjusting_for": ["steps", "active_minutes"],
+                "why_meaningful": "It supports a target-trial demo for a policy-assigned intervention.",
+            },
+            {
+                "question": (
+                    "Synthetic Homer demo: what is the effect of caffeine intake on sleep quality?"
+                ),
+                "exposure": "caffeine_mg",
+                "outcome": "outcome_sleep_quality",
+                "time_zero_definition": "End of caffeine exposure window before sleep.",
+                "follow_up_window": "Same-night sleep quality.",
+                "adjustment_variables": [
+                    "prior_fatigue",
+                    "prior_sleep_quality",
+                    "prior_stress_score",
+                    "is_workday",
+                ],
+                "possible_confounders": [
+                    "prior_fatigue",
+                    "prior_sleep_quality",
+                    "prior_stress_score",
+                    "is_workday",
+                ],
+                "variables_to_avoid_adjusting_for": ["sleep_duration_hours"],
+                "why_meaningful": "It demonstrates a continuous treatment in the synthetic daily table.",
+            },
+            {
+                "question": (
+                    "Synthetic Homer demo: what is the effect of outdoor illuminance exposure "
+                    "on sleep quality?"
+                ),
+                "exposure": "avg_daytime_outdoor_illuminance",
+                "outcome": "outcome_sleep_quality",
+                "time_zero_definition": "Daytime illuminance window before the sleep episode.",
+                "follow_up_window": "Same-night sleep quality.",
+                "adjustment_variables": [
+                    "is_workday",
+                    "prior_fatigue",
+                    "prior_steps",
+                    "prior_stress_score",
+                ],
+                "possible_confounders": [
+                    "is_workday",
+                    "prior_fatigue",
+                    "prior_steps",
+                    "prior_stress_score",
+                ],
+                "variables_to_avoid_adjusting_for": ["active_minutes"],
+                "why_meaningful": "It connects environmental smart-home sensors to a sleep outcome.",
+            },
+            {
+                "question": (
+                    "Synthetic Homer demo: what is the effect of TV minutes on next-day fatigue?"
+                ),
+                "exposure": "tv_minutes",
+                "outcome": "outcome_next_day_fatigue",
+                "time_zero_definition": "Evening TV viewing window before sleep.",
+                "follow_up_window": "Next-day fatigue outcome.",
+                "adjustment_variables": [
+                    "prior_fatigue",
+                    "prior_sleep_quality",
+                    "prior_stress_score",
+                    "is_weekend",
+                    "caffeine_mg",
+                ],
+                "possible_confounders": [
+                    "prior_fatigue",
+                    "prior_sleep_quality",
+                    "prior_stress_score",
+                    "is_weekend",
+                    "caffeine_mg",
+                ],
+                "variables_to_avoid_adjusting_for": ["late_night_screen_minutes", "sleep_quality"],
+                "why_meaningful": "It uses media and smart-plug signals from the synthetic HA-style data.",
+            },
+            {
+                "question": (
                     "What would happen to next-day sleep quality if this patient reduced "
                     "late-night screen time to 120 minutes or less compared with higher-use days?"
                 ),

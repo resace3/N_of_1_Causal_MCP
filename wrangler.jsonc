@@ -1,21 +1,21 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "remote-mcp-server-authless",
-  "main": "src/worker.py",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-06-17",
-  "compatibility_flags": ["python_workers"],
+  "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
     "bindings": [
       {
         "name": "N_OF_1_MCP",
-        "class_name": "PatientCausalMCPServer"
+        "class_name": "MyMCP"
       }
     ]
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["PatientCausalMCPServer"]
+      "new_sqlite_classes": ["MyMCP"]
     }
   ],
   "observability": {

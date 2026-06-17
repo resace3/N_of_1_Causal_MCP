@@ -71,4 +71,20 @@ class SimulateInterventionInput(DataInput):
 
 
 class ExportDatasetInput(DataInput):
-    format: Literal["csv", "json"] = "csv"
+    format: Literal["csv", "json", "sql"] = "csv"
+    table: str = "daily"
+
+
+class QueryHaStatesInput(DataInput):
+    entity_id: str | None = None
+    domain: str | None = None
+    start: str | None = None
+    end: str | None = None
+    limit: int = Field(default=1000, ge=1, le=10000)
+    include_attributes: bool = False
+    parse_numeric: bool = False
+
+
+class AggregateHaStatesDailyInput(DataInput):
+    entity_ids: list[str] | None = None
+    aggregation_config: dict[str, Any] | None = None

@@ -1,13 +1,20 @@
 # Deploy N_of_1_Causal_MCP as a Cloudflare remote MCP server
 
-This deploys the real Python `patient-causal-mcp` tools as an authless remote MCP server on Cloudflare Python Workers.
+This deploys a public, synthetic-only remote MCP server on Cloudflare Workers.
+
+The local stdio MCP server remains the Python implementation in `src/patient_causal_mcp/server.py`. The public Cloudflare endpoint uses `src/worker.ts`, a dependency-free TypeScript Worker that keeps the same MCP tool names and deterministic synthetic data while fitting Cloudflare Workers free-plan size limits.
 
 It provides:
 
 - Authless remote MCP access for demonstration.
 - Streamable HTTP at `/mcp`.
 - Health JSON at `/` and `/health`.
-- The same real Python causal-analysis tools as the local stdio MCP server.
+- Public tool schemas that omit `data_records`.
+- Runtime rejection of caller-supplied `data_records`.
+- Deterministic synthetic datasets only.
+- Homer Simpson fictional/parody Home Assistant-style dataset metadata, daily rows, and a compact queryable HA-state subset with fictional zone labels only.
+- A 128 KiB MCP request body limit.
+- Browser CORS headers only for approved local development origins.
 
 The configured Worker name is `remote-mcp-server-authless`, preserving this production URL:
 
@@ -15,15 +22,12 @@ The configured Worker name is `remote-mcp-server-authless`, preserving this prod
 https://remote-mcp-server-authless.resace3.workers.dev/mcp
 ```
 
-If you create a new Worker instead of reusing the existing one, rename the `name` value in `wrangler.jsonc` to something like `n-of-1-causal-mcp`.
-
 ## Prerequisites
 
-- Python 3.12.
-- `uv`.
 - Node 18 or newer.
 - `npm` or `npx`.
-- Cloudflare login locally, or a Cloudflare dashboard build integration.
+- Cloudflare login locally, or `CLOUDFLARE_API_TOKEN` in the environment.
+- Python 3.12 and `uv` only for the local stdio MCP server and Python tests.
 
 ## Local Install
 
@@ -42,12 +46,12 @@ npm install
 uv run python -m patient_causal_mcp.server
 ```
 
-This starts the original local stdio MCP server. It should continue to work for MCP hosts that launch local tools.
+This starts the Python stdio MCP server for MCP hosts that launch local tools.
 
 ## Local Cloudflare Worker Test
 
 ```bash
-uv run pywrangler dev
+npm run dev
 ```
 
 The local development URL is usually:
@@ -56,7 +60,7 @@ The local development URL is usually:
 http://localhost:8787/mcp
 ```
 
-Use the exact port printed by `pywrangler` if it chooses a different one.
+Use the exact port printed by Wrangler if it chooses a different one.
 
 ## MCP Inspector Test
 
@@ -71,13 +75,6 @@ Transport: Streamable HTTP
 URL: http://localhost:8787/mcp
 ```
 
-Then click:
-
-```text
-Connect
-List Tools
-```
-
 Expected tools:
 
 - `get_available_datasets`
@@ -90,6 +87,8 @@ Expected tools:
 - `check_adjustment_set`
 - `simulate_intervention`
 - `export_dataset`
+- `query_ha_states`
+- `aggregate_ha_states_daily`
 
 You can also run the local HTTP smoke script:
 
@@ -97,23 +96,21 @@ You can also run the local HTTP smoke script:
 uv run python scripts/test_remote_mcp_http.py http://localhost:8787/mcp
 ```
 
-## Cloudflare Dashboard Deployment
+## Deployment
 
-Use these settings in Workers & Pages:
-
-- Git repository: `resace3/N_of_1_Causal_MCP`.
-- Root directory: `/`.
-- Build command: leave empty.
-- Deploy command: `npm run deploy`.
-- Production branch: `main`.
-
-Save and deploy.
-
-The npm script is intentionally thin. It installs or uses `uv`, then runs:
+Deploy with:
 
 ```bash
-uv run pywrangler deploy
+npm run deploy
 ```
+
+The npm script runs:
+
+```bash
+npx wrangler deploy
+```
+
+The Worker keeps the existing deployed Durable Object class name `MyMCP` because Cloudflare requires already-migrated Durable Object classes to remain exported unless a migration deletes or renames them. The binding is named `N_OF_1_MCP` in `wrangler.jsonc`.
 
 ## Production Test
 
@@ -123,31 +120,17 @@ Expected production endpoint:
 https://remote-mcp-server-authless.resace3.workers.dev/mcp
 ```
 
-Test it with MCP Inspector:
-
-```bash
-npx @modelcontextprotocol/inspector@latest
-```
-
-Use:
-
-```text
-Transport: Streamable HTTP
-URL: https://remote-mcp-server-authless.resace3.workers.dev/mcp
-```
-
-Then click:
-
-```text
-Connect
-List Tools
-```
-
-The root and health endpoints return simple JSON:
+Health endpoints:
 
 ```text
 https://remote-mcp-server-authless.resace3.workers.dev/
 https://remote-mcp-server-authless.resace3.workers.dev/health
+```
+
+Smoke test:
+
+```bash
+uv run python scripts/test_remote_mcp_http.py https://remote-mcp-server-authless.resace3.workers.dev/mcp
 ```
 
 ## Claude Desktop Through mcp-remote
@@ -170,61 +153,25 @@ Restart Claude Desktop after editing the configuration.
 
 ## Architecture Notes
 
-- `src/patient_causal_mcp/server.py` remains the single source of MCP tool registration.
-- `create_mcp_server()` keeps local stdio behavior.
-- `create_cloudflare_mcp_server()` configures FastMCP for Streamable HTTP at `/mcp`.
-- `src/worker.py` uses the current Python Workers `Default(WorkerEntrypoint)` entrypoint.
-- `PatientCausalMCPServer(DurableObject)` owns the FastMCP ASGI app.
-- A Durable Object binding named `N_OF_1_MCP` uses the deterministic object id `global` so the in-memory dataset registry is not tied to random isolate globals.
-- `src/asgi.py` bridges Cloudflare Request/Response objects to the FastMCP ASGI app.
-- `src/uvicorn.py` is a compatibility shim for optional SDK imports; the Worker does not run uvicorn.
-- The dependency range uses MCP `1.12.x` because MCP `1.27+` currently requires `pydantic>=2.11`, and pywrangler/Pyodide could not resolve a usable `pydantic-core` wheel for that line during local testing. MCP `1.12.4` still exposes `FastMCP.streamable_http_app()`.
-
-## Python Worker Limitations
-
-- Python Workers use Pyodide.
-- `pywrangler` bundles packages from `pyproject.toml`.
-- The ASGI bridge currently collects finite JSON responses and does not implement long-lived event-stream resumability.
-- If deployment fails due to unsupported packages, bundle size, or Pyodide issues, record the exact error.
-- Do not remove real causal-analysis functionality to hide a deployment error.
-- If NumPy or Pandas causes a package limitation, use a follow-up TypeScript Worker port or split architecture rather than replacing tools with stubs.
-
-## Current Local Cloudflare Blocker
-
-`uv run pywrangler dev` successfully resolved and installed the Python Worker packages into `python_modules` and `.venv-workers`, including MCP `1.12.4`, Pydantic `2.10.6`, NumPy, and Pandas.
-
-In this container, Wrangler then failed before exposing `localhost:8787`:
-
-```text
-ERROR write EPIPE
-```
-
-Running the bundled local `workerd` binary directly shows the underlying loader failure:
-
-```text
-Error relocating node_modules/@cloudflare/workerd-linux-arm64/bin/workerd: fcntl64: symbol not found
-Error relocating node_modules/@cloudflare/workerd-linux-arm64/bin/workerd: _dl_find_object: symbol not found
-Error relocating node_modules/@cloudflare/workerd-linux-arm64/bin/workerd: fcntl64: symbol not found
-```
-
-This appears to be a local runtime binary/libc incompatibility for the installed `workerd` binary on this environment, not a Python syntax or dependency-resolution failure. Because the local dev server did not bind a port, MCP Inspector could not be used against `http://localhost:8787/mcp` in this environment.
-
-`npm run deploy` reached Wrangler and stopped only because this non-interactive environment does not have `CLOUDFLARE_API_TOKEN` set. Run this after Cloudflare login or with a token:
-
-```bash
-export CLOUDFLARE_API_TOKEN=...
-npm run deploy
-```
+- `src/patient_causal_mcp/server.py` remains the Python stdio MCP implementation.
+- `src/worker.ts` is the public Cloudflare Worker implementation.
+- `src/patient_causal_mcp/tool_metadata.py` shares the canonical tool-name list with tests.
+- The public Worker omits caller-supplied `data_records` from tool schemas and serves only bundled/generated synthetic data.
+- `MyMCP` owns the public Worker MCP handler and is preserved for existing Durable Object migration compatibility.
+- The public Worker is stateless for MCP responses; the Durable Object gives the deployment a stable object id and preserves compatibility with the existing Cloudflare Worker history.
+- The TypeScript public Worker was chosen because the Python Worker bundle with MCP, Pydantic, NumPy, and Pandas exceeds the Cloudflare Workers free-plan size limit.
 
 ## Security Warning
 
-This deployment is authless. Anyone who knows the URL can call the tools.
+This deployment is authless. Anyone who knows the URL can call the tools against deterministic synthetic datasets.
+
+The public Cloudflare endpoint rejects caller-supplied `data_records`, enforces a 128 KiB MCP request body limit, and only emits browser CORS headers for approved local development origins. The Homer Home Assistant-style public data uses fictional identifiers and zone labels only; it does not contain real Home Assistant database rows, coordinates, addresses, phone numbers, secrets, or external API calls. These controls reduce accidental exposure and browser abuse, but they are not a substitute for authentication if real data is ever connected.
 
 Do not connect private health, location, phone, financial, email, or Home Assistant data until authentication and authorization are added.
 
 ## Important Warnings
 
 - `/mcp` is not a normal web page. A browser GET may not look useful.
-- The bundled data are synthetic and the outputs are not medical advice.
+- The public datasets are synthetic and the outputs are not medical advice.
 - Causal estimates depend on modeling and adjustment assumptions.
-- Python FastMCP Workers may exceed Cloudflare Workers free plan bundle limits. If deployment fails due to bundle size, record the exact Cloudflare error and consider either a Workers paid plan, a TypeScript port of the causal engine, or running the Python MCP server elsewhere with Cloudflare as a secured proxy.
+- The TypeScript Worker uses lightweight deterministic estimators for public demonstration; use the local Python stdio server for the fuller Python analysis implementation.

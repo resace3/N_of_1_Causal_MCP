@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](pyproject.toml)
 [![Repository](https://img.shields.io/badge/GitHub-resace3%2FN__of__1__Causal__MCP-black.svg)](https://github.com/resace3/N_of_1_Causal_MCP)
 
-`patient-causal-mcp` is both a local stdio Model Context Protocol server and a Cloudflare remote MCP server for N-of-1 digital health causal analysis. It ships with a static raw 30-day sensor/event dataset, a static 100-day analysis-ready patient dataset, and MCP tools that let an AI assistant summarize the data, inspect causal assumptions, run causal analyses, emulate target trials, simulate interventions, and export results.
+`patient-causal-mcp` is both a local stdio Model Context Protocol server and a Cloudflare remote MCP server for N-of-1 digital health causal analysis. It ships with static synthetic patient datasets plus runtime-generated synthetic Homer Simpson parody datasets that mimic Home Assistant Recorder-style state history. MCP tools let an AI assistant summarize the data, inspect causal assumptions, query Home Assistant-style states, aggregate raw state history, run causal analyses, emulate target trials, simulate interventions, and export results.
 
 This repository does **not** expose a `simulate_patient_data` MCP tool. The patient dataset is already present in the repo at:
 
@@ -17,7 +17,7 @@ src/patient_causal_mcp/data/patient_001_raw_events_30_days.csv
 src/patient_causal_mcp/data/patient_001_100_days.csv
 ```
 
-The data are synthetic and manually bundled for demonstration, research prototyping, and education. The project does not provide medical advice.
+The data are synthetic and manually bundled or deterministically generated for demonstration, research prototyping, and education. The Homer Simpson profile is fictional/parody data, is not official Simpsons data, and is not real personal data. The project does not provide medical advice.
 
 ## Highlights
 
@@ -29,6 +29,7 @@ The data are synthetic and manually bundled for demonstration, research prototyp
 - Default dataset is loaded into memory when the MCP server starts.
 - Tools also accept raw records for stateless workflows or future real-data integration.
 - Designed for future integration with Home Assistant, Fitbit, phone sensors, smart plugs, pantry sensors, refrigerator sensors, medication cabinet sensors, and blood pressure readings.
+- Home Assistant Recorder-inspired synthetic datasets with normalized `states`, `states_meta`, and `state_attributes` tables, flattened export, daily aggregation, and SQL dump export.
 
 ## Bundled Datasets
 
@@ -78,6 +79,36 @@ The daily dataset contains 85 engineered columns for causal examples, including:
 | Financial | `transactions_count`, `card_spend_usd`, `cash_withdrawal_usd`, `grocery_spend_usd`, `restaurant_spend_usd`, `alcohol_spend_usd`, `ride_share_spend_usd`, `online_purchase_count` |
 | Calendar and context | `work_calendar_events`, `meeting_minutes`, `intervention_received`, `stress_score`, `mood_score`, `pain_score` |
 | Outcomes | `outcome_sleep_quality`, `outcome_next_day_fatigue`, `outcome_mood_next_day`, `outcome_bp_next_day` |
+
+### Homer Home Assistant-Style Synthetic Datasets
+
+These generated datasets are 100 percent synthetic and centered on a fictional parody household profile:
+
+```text
+subject_id: homer_simpson
+profile_type: fictional_parody
+timezone: America/New_York
+default start: 2026-01-01T00:00:00-05:00
+fictional zones: springfield_home, springfield_work, moes_area, kwik_e_mart_area, school_area, power_plant_area
+```
+
+Dataset IDs:
+
+| Dataset | Type | Days | Tables |
+| --- | --- | --- | --- |
+| `homer_simpson_ha_states_30_days` | Home Assistant Recorder-style raw states | 30 | `states`, `states_meta`, `state_attributes`, `flattened`, `daily` |
+| `homer_simpson_ha_states_100_days` | Higher-density raw states | 100 | `states`, `states_meta`, `state_attributes`, `flattened`, `daily` |
+| `homer_simpson_daily_100_days` | Analysis-ready daily table | 100 | `daily` |
+| `homer_simpson_ha_sqlite_demo_30_days` | Minimal Recorder-style SQL dump export | 30 | SQL dump plus normalized tables |
+
+The raw schema is Home Assistant Recorder-inspired, not an export from a real Home Assistant installation. It includes normalized `states_meta`, reusable `state_attributes`, and `states` rows where numeric states are stored as strings. Entity coverage includes wearable, phone, room motion/contact, illuminance, temperature, CO2, PM2.5, media, appliances, car, work/calendar, food/drink proxy, health self-report, and derived daily entities.
+
+Privacy constraints for the Homer datasets:
+
+- No real person, account, home, address, device ID, phone number, coordinate, secret, API call, or Home Assistant database is used.
+- Location is represented only as fictional zone labels.
+- The parody profile uses broad fictional traits only; it contains no show dialogue, episode text, official media, images, audio, or copyrighted passages.
+- Deterministic generation means the same seed and parameters produce identical tables.
 
 ## Why MCP
 
@@ -141,19 +172,19 @@ Use this configuration pattern for an MCP host that launches local stdio servers
 
 ## Cloudflare Remote MCP
 
-The same Python MCP tool surface can also run as an authless Cloudflare Python Worker using Streamable HTTP:
+The project also includes a public, synthetic-only Cloudflare Worker MCP endpoint using Streamable HTTP:
 
 ```text
 https://remote-mcp-server-authless.resace3.workers.dev/mcp
 ```
 
-The local stdio entrypoint remains unchanged. Cloudflare deployment is additive and uses `src/worker.py` plus the same `patient_causal_mcp.server.create_mcp_server` tool registration path. The Worker exposes health JSON at `/` and `/health`, then routes MCP traffic to `/mcp`.
+The local Python stdio entrypoint remains unchanged. Cloudflare deployment is additive and uses the dependency-free TypeScript Worker at `src/worker.ts`. The Worker exposes health JSON at `/` and `/health`, then routes MCP traffic to `/mcp`.
 
 Quick local Worker test:
 
 ```bash
 npm install
-uv run pywrangler dev
+npm run dev
 ```
 
 Then connect MCP Inspector with:
@@ -165,9 +196,9 @@ URL: http://localhost:8787/mcp
 
 Full deployment instructions are in [CLOUDFLARE.md](CLOUDFLARE.md).
 
-Security note: the configured Worker is authless for demonstration. Do not connect private Home Assistant, wearable, phone, financial, or clinical datasets until authentication is added.
+Security note: the configured Worker is authless for demonstration, but the public Cloudflare implementation rejects caller-supplied `data_records` and only serves deterministic synthetic datasets. Do not connect private Home Assistant, wearable, phone, financial, or clinical datasets until authentication and authorization are added.
 
-Implementation note: the Python Worker uses FastMCP with `json_response=True` and a small ASGI bridge that collects finite JSON responses. Long-lived event-stream resumability is not implemented in this Python bridge.
+Implementation note: the public Worker keeps the same MCP tool names as the Python server, but uses lightweight JavaScript estimators and a compact Homer HA query subset so it fits Cloudflare Workers free-plan size limits. The local stdio MCP server remains the full Python implementation.
 
 ## Tool Inventory
 
@@ -182,7 +213,9 @@ Implementation note: the Python Worker uses FastMCP with `json_response=True` an
 | `generate_causal_dag` | Return scenario DAG nodes, edges, adjustment guidance, DOT, and Mermaid text. |
 | `check_adjustment_set` | Flag missing confounders, adjusted mediators, and possible colliders in a practical adjustment set. |
 | `simulate_intervention` | Predict what could happen under a behavioral or medication-related intervention. |
-| `export_dataset` | Export the dataset as CSV text or JSON records. |
+| `export_dataset` | Export CSV, JSON, normalized HA JSON, or Homer SQL dump data. |
+| `query_ha_states` | Filter Homer Home Assistant-style state rows by entity, domain, and time. |
+| `aggregate_ha_states_daily` | Derive daily analysis rows from Homer Home Assistant-style raw state history. |
 
 ## Supported Causal Scenarios
 
@@ -194,6 +227,11 @@ Implementation note: the Python Worker uses FastMCP with `json_response=True` an
 | `stress_sleep` | `stress_score` | `outcome_sleep_quality` | What is the effect of high stress on same-night sleep quality? |
 | `nighttime_eating_fatigue` | `nighttime_eating` | `morning_fatigue` | What is the effect of nighttime eating on morning fatigue? |
 | `mixed_lifestyle` | `intervention_received` | `outcome_sleep_quality` | What is the effect of an evening reminder intervention on sleep quality? |
+| `homer_late_screen_sleep` | `late_night_screen_minutes` | `outcome_next_day_fatigue` | What is the effect of late-night screen time on next-day fatigue in the synthetic Homer data? |
+| `homer_walk_nudge_mood` | `walk_nudge_received` | `outcome_mood_next_day` | What is the effect of walk nudges on next-day mood in the synthetic Homer data? |
+| `homer_caffeine_sleep` | `caffeine_mg` | `outcome_sleep_quality` | What is the effect of caffeine intake on sleep quality in the synthetic Homer data? |
+| `homer_illuminance_sleep` | `avg_daytime_outdoor_illuminance` | `outcome_sleep_quality` | What is the effect of outdoor illuminance exposure on sleep quality? |
+| `homer_tv_fatigue` | `tv_minutes` | `outcome_next_day_fatigue` | What is the effect of TV minutes on next-day fatigue? |
 
 ## Example Tool Calls
 
@@ -356,6 +394,105 @@ Supported intervention operations:
 - `set_maximum`
 - `set_value`
 
+### Query Homer Home Assistant States
+
+```json
+{
+  "tool": "query_ha_states",
+  "arguments": {
+    "dataset_id": "homer_simpson_ha_states_30_days",
+    "entity_id": "sensor.homer_watch_heart_rate",
+    "start": "2026-01-02T00:00:00-05:00",
+    "end": "2026-01-03T23:59:59-05:00",
+    "limit": 100,
+    "include_attributes": true,
+    "parse_numeric": true
+  }
+}
+```
+
+### Export Homer Tables
+
+CSV export of a single table:
+
+```json
+{
+  "tool": "export_dataset",
+  "arguments": {
+    "dataset_id": "homer_simpson_ha_states_30_days",
+    "format": "csv",
+    "table": "states"
+  }
+}
+```
+
+Normalized JSON export:
+
+```json
+{
+  "tool": "export_dataset",
+  "arguments": {
+    "dataset_id": "homer_simpson_ha_states_30_days",
+    "format": "json",
+    "table": "normalized"
+  }
+}
+```
+
+### Aggregate Homer Raw States Daily
+
+```json
+{
+  "tool": "aggregate_ha_states_daily",
+  "arguments": {
+    "dataset_id": "homer_simpson_ha_states_30_days"
+  }
+}
+```
+
+### Estimate A Homer Synthetic Effect
+
+```json
+{
+  "tool": "estimate_causal_effect",
+  "arguments": {
+    "dataset_id": "homer_simpson_daily_100_days",
+    "exposure": "late_night_screen_minutes",
+    "outcome": "outcome_next_day_fatigue",
+    "treatment_rule": {
+      "type": "set_value",
+      "value_a": 180,
+      "value_b": 60
+    },
+    "adjustment_variables": [
+      "prior_sleep_quality",
+      "prior_fatigue",
+      "prior_stress_score",
+      "is_workday",
+      "caffeine_mg"
+    ],
+    "method": "g_formula"
+  }
+}
+```
+
+### Run A Homer Prebuilt Target Trial
+
+When `treatment_strategies` is empty for the Homer daily dataset, the server can fill a prebuilt synthetic protocol based on the assignment/outcome text:
+
+```json
+{
+  "tool": "run_target_trial_emulation",
+  "arguments": {
+    "dataset_id": "homer_simpson_daily_100_days",
+    "assignment_time": "walk nudge demo",
+    "treatment_strategies": [],
+    "outcome": "outcome_mood_next_day",
+    "method": "g_formula"
+  }
+}
+```
+
 ## Direct Python Example
 
 ```bash
@@ -380,11 +517,10 @@ patient-causal-mcp/
     cf-deploy.sh
     test_remote_mcp_http.py
   src/
-    asgi.py
-    uvicorn.py
-    worker.py
+    worker.ts
     patient_causal_mcp/
       __init__.py
+      tool_metadata.py
       server.py
       datasets.py
       simulator.py
@@ -393,6 +529,8 @@ patient-causal-mcp/
       dag.py
       schemas.py
       utils.py
+      synthetic/
+        homer_ha.py
       data/
         patient_001_raw_events_30_days.csv
         patient_001_raw_events_30_days_metadata.json
@@ -414,15 +552,15 @@ patient-causal-mcp/
 Core modules:
 
 - `server.py`: MCP tool registration and in-memory dataset registry.
-- `worker.py`: Cloudflare Python Worker `Default(WorkerEntrypoint)` entrypoint for `/`, `/health`, and `/mcp`.
-- `asgi.py`: minimal Cloudflare Request/Response to ASGI bridge for Streamable HTTP.
-- `uvicorn.py`: Worker compatibility shim for optional SDK imports.
+- `worker.ts`: Cloudflare Worker entrypoint for public synthetic-only `/`, `/health`, and `/mcp`.
+- `tool_metadata.py`: shared MCP tool-name metadata used by tests and docs.
 - `datasets.py`: package-data loader and bundled dataset metadata.
 - `scenarios.py`: scenario metadata, variable dictionary, DAG edges, and default adjustment sets.
 - `causal_engine.py`: descriptive summaries, causal estimators, target trial emulation, intervention simulation, and export.
 - `dag.py`: DAG serialization and practical adjustment-set checks.
 - `schemas.py`: Pydantic models for tool inputs.
 - `utils.py`: shared validation and data conversion helpers.
+- `synthetic/homer_ha.py`: deterministic Homer Home Assistant-style raw-state and daily dataset generator.
 
 `simulator.py` remains as a development utility for creating synthetic data variants, but it is not registered as an MCP tool.
 
@@ -461,7 +599,7 @@ PY
 
 Expected tools include `get_available_datasets`; they do not include `simulate_patient_data`.
 
-Run a local Streamable HTTP smoke test after starting `pywrangler dev`:
+Run a local Streamable HTTP smoke test after starting `npm run dev`:
 
 ```bash
 uv run python scripts/test_remote_mcp_http.py http://localhost:8787/mcp

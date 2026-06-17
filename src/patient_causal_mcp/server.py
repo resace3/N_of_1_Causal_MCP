@@ -1,5 +1,7 @@
 """MCP server exposing bundled patient data and causal analysis tools."""
 
+from functools import wraps
+from inspect import Signature, signature
 from typing import Any
 
 from patient_causal_mcp.causal_engine import CausalAnalysisEngine
@@ -12,15 +14,29 @@ from patient_causal_mcp.datasets import (
 )
 from patient_causal_mcp.scenarios import list_scenarios
 from patient_causal_mcp.schemas import (
+    AggregateHaStatesDailyInput,
     CheckAdjustmentSetInput,
     DescribePatientDataInput,
     EstimateCausalEffectInput,
     ExportDatasetInput,
     GenerateDagInput,
     ProposeCausalQuestionInput,
+    QueryHaStatesInput,
     SimulateInterventionInput,
     TargetTrialInput,
 )
+from patient_causal_mcp.synthetic.homer_ha import (
+    aggregate_homer_ha_states_daily,
+    describe_homer_dataset,
+    export_homer_dataset,
+    get_homer_dataset_metadata,
+    homer_records_for_analysis,
+    is_homer_dataset,
+    query_homer_ha_states,
+)
+from patient_causal_mcp.tool_metadata import TOOL_NAMES
+
+__all__ = ["TOOL_NAMES", "create_cloudflare_mcp_server", "create_mcp_server"]
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -30,18 +46,10 @@ except Exception:  # pragma: no cover - exercised only when the MCP SDK is unava
 
 DATASET_REGISTRY: dict[str, list[dict[str, Any]]] = {}
 ENGINE = CausalAnalysisEngine()
-TOOL_NAMES: list[str] = [
-    "get_available_datasets",
-    "get_available_scenarios",
-    "describe_patient_data",
-    "propose_causal_question",
-    "estimate_causal_effect",
-    "run_target_trial_emulation",
-    "generate_causal_dag",
-    "check_adjustment_set",
-    "simulate_intervention",
-    "export_dataset",
-]
+PUBLIC_SYNTHETIC_ONLY_ERROR = (
+    "Caller-supplied data_records are disabled on the public Cloudflare MCP endpoint. "
+    "Use one of the bundled synthetic dataset_id values instead."
+)
 
 
 def _ensure_bundled_datasets_loaded() -> None:
@@ -60,11 +68,13 @@ def _records_from_input(
 
     if data_records is not None:
         return data_records
-    _ensure_bundled_datasets_loaded()
     if not dataset_id:
         dataset_id = DEFAULT_DATASET_ID
+    if is_homer_dataset(dataset_id):
+        return homer_records_for_analysis(dataset_id)
+    _ensure_bundled_datasets_loaded()
     if dataset_id not in DATASET_REGISTRY:
-        known = ", ".join(sorted(DATASET_REGISTRY)) or "none"
+        known = ", ".join(sorted([*DATASET_REGISTRY, *[item["dataset_id"] for item in get_homer_dataset_metadata()]])) or "none"
         raise ValueError(f"Unknown dataset_id '{dataset_id}'. Known dataset_ids: {known}.")
     return DATASET_REGISTRY[dataset_id]
 
@@ -73,10 +83,11 @@ def get_available_datasets() -> dict:
     """Return bundled static datasets available for analysis."""
 
     _ensure_bundled_datasets_loaded()
+    datasets = [*get_bundled_dataset_metadata(), *get_homer_dataset_metadata()]
     return {
         "default_dataset_id": DEFAULT_DATASET_ID,
-        "datasets": get_bundled_dataset_metadata(),
-        "loaded_dataset_ids": sorted(DATASET_REGISTRY),
+        "datasets": datasets,
+        "loaded_dataset_ids": sorted([*DATASET_REGISTRY, *[item["dataset_id"] for item in get_homer_dataset_metadata()]]),
     }
 
 
@@ -98,6 +109,8 @@ def describe_patient_data(
         data_records=data_records,
         variables=variables,
     )
+    if request.data_records is None and request.dataset_id and is_homer_dataset(request.dataset_id):
+        return describe_homer_dataset(request.dataset_id, variables=request.variables)
     records = _records_from_input(request.dataset_id, request.data_records)
     return ENGINE.describe_patient_data(records, variables=request.variables)
 
@@ -116,6 +129,87 @@ def propose_causal_question(
     )
     records = _records_from_input(request.dataset_id, request.data_records)
     return ENGINE.propose_causal_question(records, user_goal=request.user_goal)
+
+
+def _homer_target_trial_defaults(
+    *,
+    dataset_id: str | None,
+    eligibility_criteria: dict[str, Any] | None,
+    treatment_strategies: list[dict[str, Any]],
+    assignment_time: object,
+    outcome: str,
+    adjustment_variables: list[str],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], object, str, list[str]]:
+    """Fill named Homer target-trial examples when strategies are omitted."""
+
+    if not dataset_id or not is_homer_dataset(dataset_id) or treatment_strategies:
+        return (
+            eligibility_criteria,
+            treatment_strategies,
+            assignment_time,
+            outcome,
+            adjustment_variables,
+        )
+    selector = f"{assignment_time} {outcome}".lower()
+    if "walk" in selector or "mood" in selector:
+        return (
+            eligibility_criteria
+            or {"prior_steps": {"max": 6500}, "prior_fatigue": {"min": 4.0}},
+            [
+                {"label": "walk nudge", "variable": "walk_nudge_received", "type": "binary_variable"},
+                {
+                    "label": "no walk nudge",
+                    "variable": "walk_nudge_received",
+                    "type": "binary_variable",
+                },
+            ],
+            "Morning low-activity nudge decision",
+            outcome or "outcome_mood_next_day",
+            adjustment_variables
+            or [
+                "prior_fatigue",
+                "prior_steps",
+                "prior_stress_score",
+                "is_workday",
+                "baseline_activity_level",
+            ],
+        )
+    if "caffeine" in selector:
+        return (
+            eligibility_criteria
+            or {"prior_fatigue": {"min": 5.0}, "prior_stress_score": {"min": 4.0}},
+            [
+                {
+                    "label": "caffeine nudge",
+                    "variable": "caffeine_nudge_received",
+                    "type": "binary_variable",
+                },
+                {
+                    "label": "no caffeine nudge",
+                    "variable": "caffeine_nudge_received",
+                    "type": "binary_variable",
+                },
+            ],
+            "Noon caffeine-risk nudge decision",
+            outcome or "outcome_sleep_quality",
+            adjustment_variables
+            or ["prior_fatigue", "prior_sleep_quality", "prior_stress_score", "is_workday"],
+        )
+    return (
+        eligibility_criteria or {"prior_fatigue": {"min": 5.5}, "prior_sleep_quality": {"max": 6.0}},
+        [
+            {"label": "sleep nudge", "variable": "sleep_nudge_received", "type": "binary_variable"},
+            {
+                "label": "no sleep nudge",
+                "variable": "sleep_nudge_received",
+                "type": "binary_variable",
+            },
+        ],
+        "8 PM sleep-risk nudge decision",
+        outcome or "outcome_sleep_quality",
+        adjustment_variables
+        or ["prior_sleep_quality", "prior_fatigue", "prior_stress_score", "is_workday"],
+    )
 
 
 def estimate_causal_effect(
@@ -190,6 +284,20 @@ def run_target_trial_emulation(
         outcome=outcome,
         adjustment_variables=adjustment_variables or [],
         method=method,  # type: ignore[arg-type]
+    )
+    (
+        request.eligibility_criteria,
+        request.treatment_strategies,
+        request.assignment_time,
+        request.outcome,
+        request.adjustment_variables,
+    ) = _homer_target_trial_defaults(
+        dataset_id=request.dataset_id,
+        eligibility_criteria=request.eligibility_criteria,
+        treatment_strategies=request.treatment_strategies,
+        assignment_time=request.assignment_time,
+        outcome=request.outcome,
+        adjustment_variables=request.adjustment_variables,
     )
     records = _records_from_input(request.dataset_id, request.data_records)
     return ENGINE.run_target_trial_emulation(
@@ -277,16 +385,117 @@ def export_dataset(
     dataset_id: str = None,
     data_records: list = None,
     format: str = "csv",
+    table: str = "daily",
 ) -> dict:
-    """Export a dataset as CSV text or JSON records."""
+    """Export a dataset as CSV text, JSON records, or a generated SQL dump."""
 
     request = ExportDatasetInput(
         dataset_id=dataset_id,
         data_records=data_records,
         format=format,  # type: ignore[arg-type]
+        table=table,
     )
+    if request.data_records is None and request.dataset_id and is_homer_dataset(request.dataset_id):
+        return export_homer_dataset(
+            dataset_id=request.dataset_id,
+            format=request.format,
+            table=request.table,
+        )
     records = _records_from_input(request.dataset_id, request.data_records)
+    if request.format == "sql":
+        raise ValueError("SQL export is only supported for Homer Home Assistant-style datasets.")
     return ENGINE.export_dataset(records, format=request.format)
+
+
+def query_ha_states(
+    dataset_id: str = None,
+    data_records: list = None,
+    entity_id: str = None,
+    domain: str = None,
+    start: str = None,
+    end: str = None,
+    limit: int = 1000,
+    include_attributes: bool = False,
+    parse_numeric: bool = False,
+) -> dict:
+    """Query Homer Home Assistant-style state history by entity, domain, and time."""
+
+    request = QueryHaStatesInput(
+        dataset_id=dataset_id,
+        data_records=data_records,
+        entity_id=entity_id,
+        domain=domain,
+        start=start,
+        end=end,
+        limit=limit,
+        include_attributes=include_attributes,
+        parse_numeric=parse_numeric,
+    )
+    if request.data_records is not None:
+        raise ValueError("query_ha_states only supports bundled synthetic HA-style datasets.")
+    if not request.dataset_id or not is_homer_dataset(request.dataset_id):
+        raise ValueError("query_ha_states currently supports only Homer synthetic HA-style dataset IDs.")
+    return query_homer_ha_states(
+        dataset_id=request.dataset_id,
+        entity_id=request.entity_id,
+        domain=request.domain,
+        start=request.start,
+        end=request.end,
+        limit=request.limit,
+        include_attributes=request.include_attributes,
+        parse_numeric=request.parse_numeric,
+    )
+
+
+def aggregate_ha_states_daily(
+    dataset_id: str = None,
+    data_records: list = None,
+    entity_ids: list = None,
+    aggregation_config: dict = None,
+) -> dict:
+    """Aggregate Homer Home Assistant-style state history into daily analysis rows."""
+
+    request = AggregateHaStatesDailyInput(
+        dataset_id=dataset_id,
+        data_records=data_records,
+        entity_ids=entity_ids,
+        aggregation_config=aggregation_config,
+    )
+    if request.data_records is not None:
+        raise ValueError("aggregate_ha_states_daily only supports bundled synthetic HA-style datasets.")
+    if not request.dataset_id or not is_homer_dataset(request.dataset_id):
+        raise ValueError(
+            "aggregate_ha_states_daily currently supports only Homer synthetic HA-style dataset IDs."
+        )
+    return aggregate_homer_ha_states_daily(
+        dataset_id=request.dataset_id,
+        entity_ids=request.entity_ids,
+        aggregation_config=request.aggregation_config,
+    )
+
+
+def _synthetic_only_public_tool(func: Any) -> Any:
+    """Wrap a tool so the public Worker cannot process caller-supplied records."""
+
+    tool_signature = signature(func)
+
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        bound = tool_signature.bind_partial(*args, **kwargs)
+        if bound.arguments.get("data_records") is not None:
+            raise ValueError(PUBLIC_SYNTHETIC_ONLY_ERROR)
+        return func(*args, **kwargs)
+
+    public_parameters = [
+        parameter
+        for name, parameter in tool_signature.parameters.items()
+        if name != "data_records"
+    ]
+    wrapper.__signature__ = Signature(  # type: ignore[attr-defined]
+        parameters=public_parameters,
+        return_annotation=tool_signature.return_annotation,
+    )
+    return wrapper
 
 
 def _new_fastmcp_server(
@@ -336,20 +545,27 @@ def _new_fastmcp_server(
         raise
 
 
-def _register_tools(mcp: Any) -> Any:
+def _register_tools(mcp: Any, *, allow_caller_data_records: bool = True) -> Any:
     """Register all MCP tools exactly once on a FastMCP instance."""
 
-    _ensure_bundled_datasets_loaded()
-    mcp.tool()(get_available_datasets)
-    mcp.tool()(get_available_scenarios)
-    mcp.tool()(describe_patient_data)
-    mcp.tool()(propose_causal_question)
-    mcp.tool()(estimate_causal_effect)
-    mcp.tool()(run_target_trial_emulation)
-    mcp.tool()(generate_causal_dag)
-    mcp.tool()(check_adjustment_set)
-    mcp.tool()(simulate_intervention)
-    mcp.tool()(export_dataset)
+    def register(func: Any) -> None:
+        if allow_caller_data_records:
+            mcp.tool()(func)
+            return
+        mcp.tool()(_synthetic_only_public_tool(func))
+
+    register(get_available_datasets)
+    register(get_available_scenarios)
+    register(describe_patient_data)
+    register(propose_causal_question)
+    register(estimate_causal_effect)
+    register(run_target_trial_emulation)
+    register(generate_causal_dag)
+    register(check_adjustment_set)
+    register(simulate_intervention)
+    register(export_dataset)
+    register(query_ha_states)
+    register(aggregate_ha_states_daily)
     return mcp
 
 
@@ -358,6 +574,7 @@ def create_mcp_server(
     stateless_http: bool = False,
     json_response: bool = False,
     streamable_http_path: str | None = None,
+    allow_caller_data_records: bool = True,
 ) -> Any:
     """Create the MCP server instance and register all tools."""
 
@@ -366,7 +583,7 @@ def create_mcp_server(
         json_response=json_response,
         streamable_http_path=streamable_http_path,
     )
-    return _register_tools(mcp)
+    return _register_tools(mcp, allow_caller_data_records=allow_caller_data_records)
 
 
 def create_cloudflare_mcp_server() -> Any:
@@ -376,6 +593,7 @@ def create_cloudflare_mcp_server() -> Any:
         stateless_http=False,
         json_response=True,
         streamable_http_path="/mcp",
+        allow_caller_data_records=False,
     )
 
 

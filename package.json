@@ -2,9 +2,9 @@
   "name": "patient-causal-mcp-cloudflare",
   "private": true,
   "version": "0.1.0",
-  "description": "Cloudflare Python Worker wrapper for the patient causal MCP server.",
+  "description": "Cloudflare Worker wrapper for the public synthetic patient causal MCP server.",
   "scripts": {
-    "dev": "uv run pywrangler dev",
+    "dev": "wrangler dev",
     "deploy": "bash scripts/cf-deploy.sh",
     "test": "uv run pytest",
     "lint": "uv run ruff check .",
